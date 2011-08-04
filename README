@@ -1,1 +1,11 @@
-These dotfiles assume you're using MacVim with the Janus collection of vim plugins: https://github.com/carlhuda/janus
+These dotfiles assume you're using MacVim with the Janus collection of vim plugins: https://github.com/carlhuda/janus locally.
+
+
+LOCAL INSTALL
+
+clone this repo and cd into it.  then run ./local-install.sh
+
+
+SERVER INSTALL
+
+clone this repo and cd into it.  then run ./server-install.sh
