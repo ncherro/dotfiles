@@ -1,8 +1,1 @@
-Assumptions:
-
-1. you're using MacVim and Janus: https://github.com/carlhuda/janus
-
-Installation:
-
-cd ~/; git clone git@github.com:ncherro/dotfiles.git;
-ln -s dotfiles/.gvimrc.local .; ln -s dotfiles/.vimrc.local .; ln -s dotfiles/.janus.rake .;
+These dotfiles assume you're using MacVim with the Janus collection of vim plugins: https://github.com/carlhuda/janus
