@@ -2,6 +2,7 @@ color jellybeans+
 
 set transparency=10
 let g:NERDTreeWinSize = 35
+let NERDTreeShowHidden=1
 
 " delete whitespace on save
 autocmd FileType c,cpp,java,php,javascript,html,css,eruby,ruby autocmd BufWritePre <buffer> :call setline(1,map(getline(1,"$"),'substitute(v:val,"\\s\\+$","","")'))
