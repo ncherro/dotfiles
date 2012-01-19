@@ -1,10 +1,6 @@
 let g:solarized_termcolors=256
 color solarized
-if has('gui_running')
-  set background=light
-else
-  set background=dark
-endif
+set background=dark
 
 set guioptions=aAce
 let g:NERDTreeWinSize = 35
