@@ -16,3 +16,6 @@
 [submodule "janus/haml"]
 	path = janus/haml
 	url = https://github.com/tpope/vim-haml
+[submodule "janus/scss-syntax"]
+	path = janus/scss-syntax
+	url = https://github.com/cakebaker/scss-syntax.vim
