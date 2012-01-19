@@ -1,0 +1,5 @@
+color jellybeans+
+set guioptions=aAce
+let g:NERDTreeWinSize = 35
+:nmap <F1> <nop>
+let $JS_CMD='node'
