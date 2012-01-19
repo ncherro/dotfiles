@@ -10,9 +10,6 @@
 [submodule "janus/autoclose"]
 	path = janus/autoclose
 	url = git://github.com/vim-scripts/AutoClose.git
-[submodule "janus/php-debugger"]
-	path = janus/php-debugger
-	url = https://github.com/ornicar/vim-php-debugger.git
 [submodule "janus/twig"]
 	path = janus/twig
 	url = https://github.com/qbbr/vim-twig.git
