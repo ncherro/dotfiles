@@ -5,7 +5,7 @@ test -r ~/.bashrc.local || echo "# use this file to extend ~/.bashrc, which is s
 test -r ~/.vim && mv ~/.vim ~/.vim.bak
 ln -s `pwd`/vim ~/.vim
 test -r ~/.vimrc && mv ~/.vimrc ~/.vimrc.bak
-ln -s `pwd`/vimrc ~/.vimrc
+ln -s `pwd`/vimrc-server ~/.vimrc
 
 echo "Setting up git aliases"
 git config --global alias.co checkout
