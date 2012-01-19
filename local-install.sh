@@ -1,11 +1,18 @@
 echo "Symlinking rc files"
-test -r ~/.gvimrc.local && mv ~/.gvimrc.local ~/.gvimrc.local.bak;
-test -r ~/.vimrc.local && mv ~/.vimrc.local ~/.vimrc.local.bak;
-test -r ~/.janus.rake && mv ~/.janus.rake ~/.janus.rake.bak;
-ln -s `pwd`/gvimrc.local ~/.gvimrc.local; ln -s `pwd`/vimrc.local ~/.vimrc.local; ln -s `pwd`/janus.rake ~/.janus.rake;
+
+test -r ~/.gvimrc.before && mv ~/.gvimrc.before ~/.gvimrc.before.bak;
+test -r ~/.gvimrc.after && mv ~/.gvimrc.after ~/.gvimrc.after.bak;
+test -r ~/.vimrc.before && mv ~/.vimrc.before ~/.vimrc.before.bak;
+test -r ~/.vimrc.after && mv ~/.vimrc.after ~/.vimrc.after.bak;
+test -r ~/.janus && mv ~/.janus ~/.janus.bak;
+
+ln -s `pwd`/gvimrc.before ~/.gvimrc.before; ln -s `pwd`/gvimrc.after ~/.gvimrc.after; ln -s `pwd`/vimrc.before ~/.vimrc.before; ln -s `pwd`/vimrc.after ~/.vimrc.after; ln -s `pwd`/janus ~/.janus;
+
 echo "Setting up git aliases"
+
 git config --global alias.co checkout;
 git config --global alias.br branch;
 git config --global alias.ci commit;
 git config --global alias.st status;
+
 echo "DONE!"
