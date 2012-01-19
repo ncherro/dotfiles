@@ -31,3 +31,6 @@ if has("gui_macvim")
   " switch to next buffer
   map <C-D-Right> :bnext<CR>
 endif
+
+" less
+nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
