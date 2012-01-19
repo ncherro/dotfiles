@@ -1,3 +1,21 @@
 [submodule "janus/solarized"]
 	path = janus/solarized
 	url = https://github.com/altercation/vim-colors-solarized
+[submodule "janus/zencoding"]
+	path = janus/zencoding
+	url = git://github.com/mattn/zencoding-vim.git
+[submodule "janus/pony"]
+	path = janus/pony
+	url = git://github.com/rainerborene/vim-pony.git
+[submodule "janus/autoclose"]
+	path = janus/autoclose
+	url = git://github.com/vim-scripts/AutoClose.git
+[submodule "janus/php-debugger"]
+	path = janus/php-debugger
+	url = https://github.com/ornicar/vim-php-debugger.git
+[submodule "janus/twig"]
+	path = janus/twig
+	url = https://github.com/qbbr/vim-twig.git
+[submodule "janus/less"]
+	path = janus/less
+	url = https://github.com/groenewege/vim-less.git
