@@ -1,3 +1,4 @@
+let g:solarized_termcolors=256
 color solarized
 if has('gui_running')
   set background=light
