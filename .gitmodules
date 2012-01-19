@@ -16,3 +16,6 @@
 [submodule "janus/less"]
 	path = janus/less
 	url = https://github.com/groenewege/vim-less.git
+[submodule "janus/haml"]
+	path = janus/haml
+	url = https://github.com/tpope/vim-haml
