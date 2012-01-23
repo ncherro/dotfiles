@@ -19,3 +19,6 @@
 [submodule "janus/scss-syntax"]
 	path = janus/scss-syntax
 	url = https://github.com/cakebaker/scss-syntax.vim
+[submodule "janus/vim-align"]
+	path = janus/vim-align
+	url = https://github.com/tsaleh/vim-align
