@@ -22,3 +22,6 @@
 [submodule "janus/vim-align"]
 	path = janus/vim-align
 	url = https://github.com/tsaleh/vim-align
+[submodule "janus/vim-less"]
+	path = janus/vim-less
+	url = https://github.com/groenewege/vim-less.git
