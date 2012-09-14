@@ -1,4 +1,3 @@
-let g:solarized_termcolors=256
 color solarized
 set background=dark
 
@@ -6,3 +5,25 @@ set guioptions=aAce
 let g:NERDTreeWinSize = 35
 :nmap <F1> <nop>
 let $JS_CMD='node'
+
+" delete whitespace on save
+autocmd FileType c,cpp,java,php,javascript,html,css,eruby,ruby,html autocmd BufWritePre <buffer> :call setline(1,map(getline(1,"$"),'substitute(v:val,"\\s\\+$","","")'))
+
+" unset the f1 (help) key
+:nmap <F1> <nop>
+
+" default whitespace options
+" ts = tab stop, sts = soft tab stop, sw shift width
+autocmd Filetype html setlocal ts=2 sts=2 sw=2
+autocmd Filetype ruby setlocal ts=2 sts=2 sw=2
+autocmd Filetype javascript setlocal ts=2 sts=2 sw=2
+autocmd Filetype python setlocal ts=4 sts=4 sw=4
+
+" default filetype options
+autocmd BufRead,BufNewFile *.erb set filetype=eruby.html
+
+" less
+nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
+
+" ctrl p should follow symlinks
+let g:ctrlp_follow_symlinks = 1
