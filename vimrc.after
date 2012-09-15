@@ -5,6 +5,9 @@ set guioptions=aAce
 let g:NERDTreeWinSize = 35
 let NERDTreeShowHidden=1
 
+" use 256 colors
+set t_Co=256
+
 :nmap <F1> <nop>
 
 let $JS_CMD='node'
