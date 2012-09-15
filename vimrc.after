@@ -12,6 +12,9 @@ let $JS_CMD='node'
 " delete whitespace on save
 autocmd FileType c,cpp,java,php,javascript,html,css,eruby,ruby,html autocmd BufWritePre <buffer> :call setline(1,map(getline(1,"$"),'substitute(v:val,"\\s\\+$","","")'))
 
+" unset the f1 (help) key
+:nmap <F1> <nop>
+
 " default whitespace options
 " ts = tab stop, sts = soft tab stop, sw shift width
 autocmd Filetype html setlocal ts=2 sts=2 sw=2
@@ -27,6 +30,3 @@ nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
 
 " ctrl p should follow symlinks
 let g:ctrlp_follow_symlinks = 1
-
-" switch to last buffer
-nnoremap <C-6> :bnext<CR>
