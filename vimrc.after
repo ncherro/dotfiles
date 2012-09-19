@@ -1,12 +1,13 @@
+" color scheme
+set t_Co=256
 set background=dark
 color solarized
 
 set guioptions=aAce
+
+" nerdtree
 let g:NERDTreeWinSize = 35
 let NERDTreeShowHidden=1
-
-" use 256 colors
-set t_Co=256
 
 :nmap <F1> <nop>
 
