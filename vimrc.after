@@ -8,15 +8,24 @@ let NERDTreeShowHidden=1
 " use 256 colors
 set t_Co=256
 
-:nmap <F1> <nop>
+" faster scrolling
+set ttyfast
 
+" fix the javascript debugger
 let $JS_CMD='node'
 
 " delete whitespace on save
 autocmd FileType c,cpp,java,php,javascript,html,css,eruby,ruby,html autocmd BufWritePre <buffer> :call setline(1,map(getline(1,"$"),'substitute(v:val,"\\s\\+$","","")'))
 
 " unset the f1 (help) key
-:nmap <F1> <nop>
+nmap <F1> <nop>
+
+" map the leader to be a comma
+let mapleader = ","
+
+" map ctrl+/ to comment stuff out - for some reason, vim sees cmd-/ as cmd-_
+nmap <C-_> <leader>c<Space>
+vmap <C-_> <leader>c<Space>
 
 " default whitespace options
 " ts = tab stop, sts = soft tab stop, sw shift width
