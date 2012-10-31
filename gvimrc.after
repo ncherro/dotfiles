@@ -9,7 +9,7 @@ let NERDTreeShowHidden=1
 autocmd FileType c,cpp,java,php,javascript,html,css,eruby,ruby,html autocmd BufWritePre <buffer> :call setline(1,map(getline(1,"$"),'substitute(v:val,"\\s\\+$","","")'))
 
 " unset the f1 (help) key
-:nmap <F1> <nop>
+nmap <F1> <nop>
 
 " default whitespace options
 " ts = tab stop, sts = soft tab stop, sw shift width
