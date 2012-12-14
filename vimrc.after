@@ -1,8 +1,8 @@
 " color scheme
-let g:solarized_termcolors=256
-set t_Co=16
 set background=dark
-color solarized
+let g:solarized_termcolors=16
+let g:solarized_termtrans=1
+colorscheme solarized
 
 set guioptions=aAce
 
@@ -41,8 +41,5 @@ autocmd BufRead,BufNewFile *.erb set filetype=eruby.html
 " less
 nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
 
-" ctrl p should follow symlinks
-"let g:ctrlp_follow_symlinks = 1
-
-" Handlebars
+" handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
