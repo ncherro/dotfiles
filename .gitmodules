@@ -25,3 +25,9 @@
 [submodule "janus/vim-autoclose"]
 	path = janus/vim-autoclose
 	url = https://github.com/Townk/vim-autoclose.git
+[submodule "janus/vim-handlebars"]
+	path = janus/vim-handlebars
+	url = https://github.com/nono/vim-handlebars.git
+[submodule "janus/vim-powerline"]
+	path = janus/vim-powerline
+	url = https://github.com/Lokaltog/vim-powerline.git
