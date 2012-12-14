@@ -1,6 +1,8 @@
 " color scheme
-color solarized
+let g:solarized_termcolors=256
+set t_Co=16
 set background=dark
+color solarized
 
 set guioptions=aAce
 
