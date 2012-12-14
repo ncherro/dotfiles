@@ -12,8 +12,11 @@ let NERDTreeShowHidden=1
 " use 256 colors
 set t_Co=256
 
-" faster scrolling
+" (try to) speed it up
 set ttyfast
+set notimeout
+set ttimeout
+set timeoutlen=50
 
 " fix the javascript debugger
 let $JS_CMD='node'
@@ -24,8 +27,8 @@ autocmd FileType c,cpp,java,php,javascript,html,css,eruby,ruby,html autocmd BufW
 " unset the f1 (help) key
 nmap <F1> <nop>
 
-" map the leader to be a comma
-let mapleader = ","
+" map the leader to a comma
+let mapleader=","
 
 " default whitespace options
 " ts = tab stop, sts = soft tab stop, sw shift width
