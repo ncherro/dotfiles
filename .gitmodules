@@ -28,6 +28,3 @@
 [submodule "janus/vim-handlebars"]
 	path = janus/vim-handlebars
 	url = https://github.com/nono/vim-handlebars.git
-[submodule "janus/vim-aftercolors"]
-	path = janus/vim-aftercolors
-	url = https://github.com/calvinchengx/vim-aftercolors.git

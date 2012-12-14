@@ -1,8 +1,13 @@
 " color scheme
+let g:solarized_termcolors=256
+set t_Co=16
 set background=dark
-let g:solarized_termcolors=16
-let g:solarized_termtrans=1
 colorscheme solarized
+
+" fix horribly ugly comment highlighting
+hi Comment none
+hi Comment ctermfg=10
+
 
 set guioptions=aAce
 
@@ -44,10 +49,5 @@ nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
 " handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 
-" Yank text to the OS X clipboard
-set clipboard=unnamed
-noremap <leader>y "+y
-noremap <leader>yy "+yy
- 
 " Preserve indentation while pasting text from the OS X clipboard
 noremap <leader>p :set paste<CR>:put  *<CR>:set nopaste<CR>
