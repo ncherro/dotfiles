@@ -43,3 +43,6 @@ nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
 
 " ctrl p should follow symlinks
 "let g:ctrlp_follow_symlinks = 1
+
+" Add auto-expander for Handlebars template tags
+"imap {{ {{}}<Esc>hi

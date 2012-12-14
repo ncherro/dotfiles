@@ -7,9 +7,6 @@
 [submodule "janus/pony"]
 	path = janus/pony
 	url = git://github.com/rainerborene/vim-pony.git
-[submodule "janus/autoclose"]
-	path = janus/autoclose
-	url = git://github.com/vim-scripts/AutoClose.git
 [submodule "janus/twig"]
 	path = janus/twig
 	url = https://github.com/qbbr/vim-twig.git
