@@ -22,9 +22,12 @@
 [submodule "janus/vim-less"]
 	path = janus/vim-less
 	url = https://github.com/groenewege/vim-less.git
-[submodule "janus/vim-autoclose"]
-	path = janus/vim-autoclose
-	url = https://github.com/Townk/vim-autoclose.git
 [submodule "janus/vim-handlebars"]
 	path = janus/vim-handlebars
 	url = https://github.com/nono/vim-handlebars.git
+[submodule "AutoClose"]
+	path = AutoClose
+	url = https://github.com/vim-scripts/AutoClose.git
+[submodule "janus/AutoClose"]
+	path = janus/AutoClose
+	url = https://github.com/vim-scripts/AutoClose.git
