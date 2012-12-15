@@ -47,7 +47,7 @@ autocmd BufRead,BufNewFile *.erb set filetype=eruby.html
 nnoremap ,m :w <BAR> !lessc % > %:t:r.css<CR><space>
 
 " handlebars
-"au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
+au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 
 " Preserve indentation while pasting text from the OS X clipboard
 noremap <leader>p :set paste<CR>:put  *<CR>:set nopaste<CR>
