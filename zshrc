@@ -21,7 +21,7 @@ source $ZSH/oh-my-zsh.sh
 
 
 # Customize to your needs...
-PROMPT='[%*] %{$fg[magenta]%}☯ %{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}$(git_prompt_info) %(!.#.$) '
+PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}$(git_prompt_info) %(!.#.$) '
 
 # /usr/local/ first, for homebrew
 # homebrew-installed python site packages
