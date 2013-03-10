@@ -2,9 +2,10 @@
 
 ## Zsh
 
-1. install zsh and [oh-my-zsh](https://github.com/robbyrussell/oh-my-zsh)
-2. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
-3. `source ~/.zshrc` or open a new shell
+1. install zsh 
+2. install [oh-my-zsh](https://github.com/robbyrussell/oh-my-zsh)
+3. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
+4. `source ~/.zshrc` or open a new shell
 
 ## Vim
 
