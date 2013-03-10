@@ -20,6 +20,10 @@ Bundle 'vim-scripts/matchit.zip'
 
 " Syntax
 Bundle 'Syntastic'
+Bundle 'pangloss/vim-javascript'
+Bundle 'kchmck/vim-coffee-script'
+Bundle 'groenewege/vim-less'
+Bundle 'Handlebars'
 
 " Formatting
 Bundle 'scrooloose/nerdcommenter'
@@ -45,13 +49,6 @@ Bundle 'git://gist.github.com/287147.git'
 
 " Ruby
 Bundle 'skalnik/vim-vroom'
-
-" CSS
-Bundle 'groenewege/vim-less'
-
-" JavaScript
-Bundle 'pangloss/vim-javascript'
-Bundle 'kchmck/vim-coffee-script'
 
 " Git
 Bundle 'tpope/vim-fugitive'
@@ -225,6 +222,9 @@ silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 " ctrlp.vim ignore
 set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*   " for Linux/MacOSX
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip
+
+" Handlebars
+au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 
 " *********************************************
 " *        Local Vimrc Customization          *
