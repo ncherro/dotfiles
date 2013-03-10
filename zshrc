@@ -37,9 +37,7 @@ export SHELL=/usr/local/bin/zsh
 export SQLPATH="/usr/local/oracle/instantclient_10_2"
 export TNS_ADMIN="/usr/local/oracle/network/admin"
 export NLS_LANG="AMERICAN_AMERICA.UTF8"
-#export PYTHONPATH=".:/usr/local/bin/python"
-#export WORKON_HOME=~/.virtualenv
-#source /usr/local/bin/virtualenvwrapper.sh
+export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
 
 
 # website stuff
@@ -70,7 +68,7 @@ alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 
 # RVM
 [[ -s "$HOME/.rvm/scripts/rvm" ]] && . "$HOME/.rvm/scripts/rvm"
-PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
+#PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
 
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"

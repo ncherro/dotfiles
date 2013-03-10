@@ -1,16 +1,14 @@
-These dotfiles assume you're using MacVim with the Janus collection of vim
-plugins: https://github.com/carlhuda/janus locally.
+# Installation
 
-INSTALL
+## ZSH
 
-git submodule init; git submodule update;
+1. install zsh and [oh-my-zsh](https://github.com/robbyrussell/oh-my-zsh)
+2. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
+3. `source ~/.zshrc` or open a new shell
 
+## Vim
 
-LOCAL INSTALL
-
-cd into this directory and run ./local-install.sh
-
-
-SERVER INSTALL
-
-cd into this directory and run ./server-install.sh
+1. install vim
+2. install [vundle](https://github.com/gmarik/vundle)
+3. `ln -s /path/to/this/dir/vimrc ~/.vimrc`
+4. launch `vim` and run `:BundleInstall`
