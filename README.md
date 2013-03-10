@@ -1,6 +1,6 @@
 # Installation
 
-## ZSH
+## Zsh
 
 1. install zsh and [oh-my-zsh](https://github.com/robbyrussell/oh-my-zsh)
 2. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
