@@ -12,3 +12,8 @@
 2. install [vundle](https://github.com/gmarik/vundle)
 3. `ln -s /path/to/this/dir/vimrc ~/.vimrc`
 4. launch `vim` and run `:BundleInstall`
+
+## Tmux
+
+1. install tmux
+2. `ln -s /path/to/this/dir/tmux.conf ~/.tmux.conf`
