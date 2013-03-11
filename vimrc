@@ -32,7 +32,7 @@ Bundle 'godlygeek/tabular'
 
 " Autocomplete
 Bundle 'tpope/vim-surround'
-Bundle 'tpope/vim-endwise'
+"Bundle 'tpope/vim-endwise'
 Bundle 'msanders/snipmate.vim'
 Bundle 'mattn/zencoding-vim'
 Bundle 'Raimondi/delimitMate'
@@ -222,6 +222,11 @@ silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 " ctrlp.vim ignore
 set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*   " for Linux/MacOSX
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip
+
+" LustyJuggler
+let g:LustyJugglerShowKeys = 'a'
+"let g:LustyJugglerAltTabMode = 1
+"noremap <silent> <A-s> :LustyJuggler<CR>
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
