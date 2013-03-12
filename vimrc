@@ -14,9 +14,10 @@ Bundle 'gmarik/vundle'
 Bundle 'kien/ctrlp.vim'
 Bundle 'mileszs/ack.vim'
 Bundle 'scrooloose/nerdtree'
-Bundle 'LustyJuggler'
 Bundle 'vim-scripts/IndexedSearch'
 Bundle 'vim-scripts/matchit.zip'
+Bundle 'tpope/vim-unimpaired'
+Bundle 'jeetsukumaran/vim-buffergator'
 
 " Syntax
 Bundle 'Syntastic'
@@ -215,6 +216,9 @@ silent! map <unique> <Leader>t :VroomRunTestFile<CR>
 silent! map <unique> <Leader>T :VroomRunNearestTest<CR>
 silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 
+" Remove trailing whitspace on save
+autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> :%s/\s\+$//e
+
 " *********************************************
 " *           Plugin Customization            *
 " *********************************************
@@ -222,11 +226,6 @@ silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 " ctrlp.vim ignore
 set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*   " for Linux/MacOSX
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip
-
-" LustyJuggler
-let g:LustyJugglerShowKeys = 'a'
-"let g:LustyJugglerAltTabMode = 1
-"noremap <silent> <A-s> :LustyJuggler<CR>
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
