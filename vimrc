@@ -25,6 +25,7 @@ Bundle 'pangloss/vim-javascript'
 Bundle 'kchmck/vim-coffee-script'
 Bundle 'groenewege/vim-less'
 Bundle 'Handlebars'
+Bundle 'yaymukund/vim-rabl'
 
 " Formatting
 Bundle 'scrooloose/nerdcommenter'
