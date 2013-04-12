@@ -39,6 +39,11 @@ export TNS_ADMIN="/usr/local/oracle/network/admin"
 export NLS_LANG="AMERICAN_AMERICA.UTF8"
 export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
 
+# virtualenv
+export WORKON_HOME=$HOME/.virtualenvs
+export PROJECT_HOME=$HOME/Devel
+source /usr/local/bin/virtualenvwrapper.sh
+
 
 # website stuff
 alias www='cd ~/Projects/www'
@@ -61,8 +66,11 @@ alias cc='drush cc all'
 alias fd='drush fd'
 
 # Postgres
+export PGDATA=/usr/local/var/postgres
 alias pg-start='pg_ctl -D /usr/local/var/postgres -l /usr/local/var/postgres/server.log start'
 alias pg-stop='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
+alias pg-start-aspire='pg_ctl -D /usr/local/var/aspire -l logfile start'
+alias pg-stop-aspire='pg_ctl -D /usr/local/var/aspire stop -s -m fast'
 alias pg-start-namely='pg_ctl -D /usr/local/var/namely -l logfile start'
 alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 
@@ -72,6 +80,9 @@ alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"
+tat() {
+  tmux at -t $1
+}
 
 # mongodb
 alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend --config /usr/local/Cellar/mongodb/2.0.4-x86_64/mongod.conf"

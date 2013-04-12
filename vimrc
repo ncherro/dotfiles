@@ -39,6 +39,7 @@ Bundle 'msanders/snipmate.vim'
 Bundle 'mattn/zencoding-vim'
 Bundle 'Raimondi/delimitMate'
 Bundle 'ervandew/supertab'
+Bundle 'vim-scripts/loremipsum'
 
 " Rails
 Bundle 'tpope/vim-rails'
@@ -51,6 +52,9 @@ Bundle 'git://gist.github.com/287147.git'
 
 " Ruby
 Bundle 'skalnik/vim-vroom'
+
+" Python
+Bundle 'nvie/vim-flake8'
 
 " Git
 Bundle 'tpope/vim-fugitive'
@@ -211,6 +215,8 @@ vmap <leader>a :call AckVisual()<CR>
 map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe (shift-backslash)
 map \| :NERDTreeFind<CR>
+" Ignore files in nerdtree
+let NERDTreeIgnore = ['\.pyc$']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -225,11 +231,18 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 " *********************************************
 
 " ctrlp.vim ignore
-set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*   " for Linux/MacOSX
-set wildignore+=*/tmp/*,*.so,*.swp,*.zip
+set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
+set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
+
+" Django html
+au BufRead,BufNewFile *.html set ft=htmldjango
+
+" flake8
+let g:flake8_ignore="E403"
+autocmd BufWritePost *.py call Flake8()
 
 " *********************************************
 " *        Local Vimrc Customization          *
