@@ -19,30 +19,33 @@ plugins=(rails git github ruby rails3)
 
 source $ZSH/oh-my-zsh.sh
 
-
-# Customize to your needs...
+# custom prompt
 PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}$(git_prompt_info) %(!.#.$) '
 
+
 # /usr/local/ first, for homebrew
-# homebrew-installed python site packages
-PATH=/usr/local/bin:/usr/local/sbin:/Users/nherro/.cabal/bin:$PATH
-PATH=/usr/local/share/python:$PATH
-export PATH=$PATH
+export PATH=/usr/local/bin:/usr/local/sbin:$PATH
+export PATH=/usr/local/share/python:$PATH
+
+# homebrew python
+export WORKON_HOME=$HOME/.virtualenvs
+export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python2.7
+export VIRTUALENVWRAPPER_VIRTUALENV_ARGS='--no-site-packages'
+export PIP_VIRTUALENV_BASE=$WORKON_HOME
+export PIP_RESPECT_VIRTUALENV=true
+if [[ -r /usr/local/share/python/virtualenvwrapper.sh ]]; then
+    source /usr/local/share/python/virtualenvwrapper.sh
+else
+    echo "WARNING: Can't find virtualenvwrapper.sh"
+fi
+
 export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/New_York
 export SHELL=/usr/local/bin/zsh
 
-export SQLPATH="/usr/local/oracle/instantclient_10_2"
-export TNS_ADMIN="/usr/local/oracle/network/admin"
-export NLS_LANG="AMERICAN_AMERICA.UTF8"
-export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
 
-# virtualenv
-export WORKON_HOME=$HOME/.virtualenvs
-export PROJECT_HOME=$HOME/Devel
-source /usr/local/bin/virtualenvwrapper.sh
 
 
 # website stuff
@@ -55,15 +58,11 @@ alias iphone='cd ~/Projects/iPhone'
 alias drushdump='drush sql-dump --result-file --gzip --structure-tables-key=common'
 alias flushcache='dscacheutil -flushcache'
 
-alias edc='www && cd nycedc/public'
-
-# mvim stuff
-alias medc='mvim ~/Projects/www/nycedc-mvim'
-alias mdink='mvim ~/Projects/www/daily-ink-mvim'
 
 # Drupal stuff
 alias cc='drush cc all'
 alias fd='drush fd'
+
 
 # Postgres
 export PGDATA=/usr/local/var/postgres
@@ -74,9 +73,10 @@ alias pg-stop-aspire='pg_ctl -D /usr/local/var/aspire stop -s -m fast'
 alias pg-start-namely='pg_ctl -D /usr/local/var/namely -l logfile start'
 alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 
+
 # RVM
 [[ -s "$HOME/.rvm/scripts/rvm" ]] && . "$HOME/.rvm/scripts/rvm"
-#PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
+
 
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"
@@ -84,8 +84,10 @@ tat() {
   tmux at -t $1
 }
 
+
 # mongodb
 alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend --config /usr/local/Cellar/mongodb/2.0.4-x86_64/mongod.conf"
+
 
 # cd to the git root of the project you're in
 cd.() {
@@ -98,6 +100,7 @@ alias nginx-stop="sudo /usr/local/sbin/nginx -s stop"
 alias nginx-reload="sudo /usr/local/sbin/nginx -s reload"
 alias nginx-restart="nginx-stop; nginx-start;"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
+
 
 # php
 alias php-stop="kill -USR2 `cat /usr/local/var/run/php-fpm.pid`"

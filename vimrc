@@ -12,7 +12,7 @@ Bundle 'gmarik/vundle'
 
 " Navigation
 Bundle 'kien/ctrlp.vim'
-Bundle 'mileszs/ack.vim'
+Bundle 'rking/ag.vim'
 Bundle 'scrooloose/nerdtree'
 Bundle 'vim-scripts/IndexedSearch'
 Bundle 'vim-scripts/matchit.zip'
@@ -140,26 +140,6 @@ function! CucumberFindUnusedSteps()
   endtry
 endfunction
 
-" Ack current word in command mode
-function! AckGrep()
-  let command = "ack ".expand("<cword>")
-  cgetexpr system(command)
-  cw
-endfunction
-
-function! AckVisual()
-  normal gv"xy
-
-  let escape_chars = ['(', ')']
-  for char in escape_chars
-    let @x = escape(@x, char)
-  endfor
-
-  let command = "ack ".shellescape(@x)
-  cgetexpr system(command)
-  cw
-endfunction
-
 function! RenameFile()
     let old_name = expand('%')
     let new_name = input('New file name: ', expand('%'), 'file')
@@ -241,7 +221,7 @@ au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 au BufRead,BufNewFile *.html set ft=htmldjango
 
 " flake8
-let g:flake8_ignore="E403"
+let g:flake8_ignore="E403,E128,F403"
 autocmd BufWritePost *.py call Flake8()
 
 " *********************************************
