@@ -24,8 +24,8 @@ PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}
 
 
 # /usr/local/ first, for homebrew
-export PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/python:$PATH
+export PATH=/usr/local/bin:/usr/local/sbin:$PATH
 
 # homebrew python
 export WORKON_HOME=$HOME/.virtualenvs
@@ -104,6 +104,9 @@ alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 
 # php
 alias php-stop="kill -USR2 `cat /usr/local/var/run/php-fpm.pid`"
+alias php-start="launchctl load -w ~/Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
+
+# other aliases
 alias l="ls -alh"
 
 killport() {
@@ -121,3 +124,5 @@ killport() {
     echo "No processes were found listening on tcp:$port"
   fi
 }
+
+PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
