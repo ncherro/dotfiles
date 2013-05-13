@@ -25,7 +25,10 @@ PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}
 
 # /usr/local/ first, for homebrew
 export PATH=/usr/local/bin:/usr/local/sbin:$PATH
+# python
 export PATH=/usr/local/share/python:$PATH
+# php
+export PATH="$(brew --prefix josegonzalez/php/php53)/bin:$PATH"
 
 # homebrew python
 export WORKON_HOME=$HOME/.virtualenvs

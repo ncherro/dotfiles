@@ -27,6 +27,10 @@ Bundle 'groenewege/vim-less'
 Bundle 'Handlebars'
 Bundle 'yaymukund/vim-rabl'
 
+" Gist
+Bundle 'mattn/webapi-vim'
+Bundle 'mattn/gist-vim'
+
 " Formatting
 Bundle 'scrooloose/nerdcommenter'
 Bundle 'Align'
