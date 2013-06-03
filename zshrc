@@ -45,6 +45,8 @@ export LANG=en_US.UTF-8
 export TZ=America/New_York
 export SHELL=/usr/local/bin/zsh
 
+# git
+export GIT_MERGE_AUTOEDIT=no
 
 
 
