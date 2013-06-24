@@ -35,6 +35,7 @@ Bundle 'mattn/gist-vim'
 Bundle 'scrooloose/nerdcommenter'
 Bundle 'Align'
 Bundle 'godlygeek/tabular'
+Bundle 'editorconfig/editorconfig-vim'
 
 " Autocomplete
 Bundle 'tpope/vim-surround'
@@ -100,7 +101,6 @@ set number                        " Show line numbers.
 set ruler                         " Show cursor position.
 set wildmode=list:longest         " Complete files like a shell.
 set wildmenu                      " Enhanced command line completion.
-set wildignore=*.o,*.obj,*~       "stuff to ignore when tab completing
 set novisualbell
 set noerrorbells
 set history=1000                  " Store lots of :cmdline history
@@ -200,7 +200,7 @@ map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe (shift-backslash)
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
-let NERDTreeIgnore = ['\.pyc$']
+let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -215,14 +215,16 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 " *********************************************
 
 " ctrlp.vim ignore
+set wildignore=*.o,*.obj,*~
 set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
-set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc
+set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 
 " Django html
 au BufRead,BufNewFile *.html set ft=htmldjango
+au BufNewFile,BufRead *.ejs set ft=html.js
 
 " flake8
 let g:flake8_ignore="E403,E128,F403"

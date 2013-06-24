@@ -24,8 +24,8 @@ PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}
 
 
 # /usr/local/ first, for homebrew
-export PATH=/usr/local/share/python:$PATH
-export PATH=/usr/local/bin:/usr/local/sbin:$PATH
+PATH=/usr/local/bin:/usr/local/sbin:$PATH
+export PATH=/usr/local/share/npm/bin:$PATH
 
 # homebrew python
 export WORKON_HOME=$HOME/.virtualenvs
@@ -104,9 +104,35 @@ alias nginx-restart="nginx-stop; nginx-start;"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 
 
-# php
-alias php-stop="kill -USR2 `cat /usr/local/var/run/php-fpm.pid`"
-alias php-start="launchctl load -w ~/Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
+# PHP-FPM
+alias php-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
+php-stop() {
+  if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
+    echo "Stopping PHP-FPM..."
+    pid=$(cat /usr/local/var/run/php-fpm.pid)
+    kill -TERM $pid
+  else
+    echo "PHP-FPM does not appear to be running"
+  fi
+}
+php-graceful-stop() {
+  if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
+    echo "Gracefully stopping PHP-FPM..."
+    pid=$(cat /usr/local/var/run/php-fpm.pid)
+    kill -QUIT $pid
+  else
+    echo "PHP-FPM does not appear to be running"
+  fi
+}
+php-reload() {
+  if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
+    echo "Reloading PHP-FPM..."
+    pid=$(cat /usr/local/var/run/php-fpm.pid)
+    kill -USR2 $pid
+  else
+    echo "PHP-FPM does not appear to be running"
+  fi
+}
 
 # other aliases
 alias l="ls -alh"
