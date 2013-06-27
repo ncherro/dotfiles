@@ -26,6 +26,7 @@ Bundle 'kchmck/vim-coffee-script'
 Bundle 'groenewege/vim-less'
 Bundle 'Handlebars'
 Bundle 'yaymukund/vim-rabl'
+Bundle 'slim-template/vim-slim'
 
 " Gist
 Bundle 'mattn/webapi-vim'
