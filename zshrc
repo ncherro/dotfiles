@@ -103,9 +103,13 @@ alias nginx-reload="sudo /usr/local/sbin/nginx -s reload"
 alias nginx-restart="nginx-stop; nginx-start;"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 
+# memcached
+alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
+
 
 # PHP-FPM
-alias php-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
+alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
+alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
 php-stop() {
   if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
     echo "Stopping PHP-FPM..."

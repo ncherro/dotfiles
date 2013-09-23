@@ -223,9 +223,10 @@ set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 
-" Django html
+" Override filetype
 au BufRead,BufNewFile *.html set ft=htmldjango
 au BufNewFile,BufRead *.ejs set ft=html.js
+au BufNewFile,BufRead Gemfile set ft=ruby
 
 " flake8
 let g:flake8_ignore="E403,E128,F403"
