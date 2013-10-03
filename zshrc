@@ -141,6 +141,9 @@ php-reload() {
 # other aliases
 alias l="ls -alh"
 
+# disable autocorrect
+alias cap="nocorrect cap"
+
 killport() {
   if [ -n "${1}" ]; then
     port=$1
