@@ -20,7 +20,7 @@ Bundle 'tpope/vim-unimpaired'
 Bundle 'jeetsukumaran/vim-buffergator'
 
 " Syntax
-Bundle 'Syntastic'
+Bundle 'scrooloose/syntastic'
 Bundle 'pangloss/vim-javascript'
 Bundle 'kchmck/vim-coffee-script'
 Bundle 'groenewege/vim-less'
