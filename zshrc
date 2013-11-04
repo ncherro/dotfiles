@@ -98,10 +98,13 @@ cd.() {
 
 # nginx
 alias nginx-start="sudo nginx"
-alias nginx-stop="sudo /usr/local/sbin/nginx -s stop"
-alias nginx-reload="sudo /usr/local/sbin/nginx -s reload"
-alias nginx-restart="nginx-stop; nginx-start;"
+alias nginx-stop="sudo /usr/local/bin/nginx -s stop"
+alias nginx-reload="sudo /usr/local/bin/nginx -s reload"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
+nginx-restart() {
+  nginx-stop;
+  nginx-start;
+}
 
 # memcached
 alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
