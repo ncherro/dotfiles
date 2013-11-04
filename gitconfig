@@ -1,5 +1,5 @@
 [push]
-	default = matching
+  default = matching
 [alias]
   co = checkout
   ci = commit
@@ -9,5 +9,7 @@
   type = cat-file -t
   dump = cat-file -p
 [user]
-	name = Nick Herro
-	email = ncherro@gmail.com
+  name = Nick Herro
+  email = ncherro@gmail.com
+[credential]
+  helper = osxkeychain
