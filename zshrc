@@ -88,7 +88,7 @@ tat() {
 
 
 # mongodb
-alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend --config /usr/local/Cellar/mongodb/2.4.3-x86_64/mongod.conf"
+alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend"
 
 
 # cd to the git root of the project you're in
@@ -162,5 +162,6 @@ killport() {
     echo "No processes were found listening on tcp:$port"
   fi
 }
+
 
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting

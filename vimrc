@@ -44,7 +44,7 @@ Bundle 'tpope/vim-surround'
 Bundle 'msanders/snipmate.vim'
 Bundle 'mattn/zencoding-vim'
 Bundle 'Raimondi/delimitMate'
-Bundle 'ervandew/supertab'
+"Bundle 'ervandew/supertab'
 Bundle 'vim-scripts/loremipsum'
 
 " Rails
@@ -226,6 +226,7 @@ au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 " Override filetype
 au BufRead,BufNewFile *.html set ft=htmldjango
 au BufNewFile,BufRead *.ejs set ft=html.js
+au BufNewFile,BufRead *.slim set ft=slim
 au BufNewFile,BufRead Gemfile set ft=ruby
 
 " flake8
