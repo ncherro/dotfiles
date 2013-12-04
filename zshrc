@@ -144,6 +144,8 @@ php-reload() {
 # other aliases
 alias l="ls -alh"
 
+alias stamp="date +%F-%H%M%S"
+
 # disable autocorrect
 alias cap="nocorrect cap"
 
@@ -162,6 +164,20 @@ killport() {
     echo "No processes were found listening on tcp:$port"
   fi
 }
+
+
+if [ -f ~/.agent.env ] ; then
+    . ~/.agent.env > /dev/null
+if ! kill -0 $SSH_AGENT_PID > /dev/null 2>&1; then
+    echo "Stale agent file found. Spawning new agent… "
+    eval `ssh-agent | tee ~/.agent.env`
+    ssh-add
+fi 
+else
+    echo "Starting ssh-agent"
+    eval `ssh-agent | tee ~/.agent.env`
+    ssh-add
+fi
 
 
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
