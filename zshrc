@@ -26,6 +26,7 @@ PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}
 # /usr/local/ first, for homebrew
 PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
+export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
 # homebrew python
 export WORKON_HOME=$HOME/.virtualenvs

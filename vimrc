@@ -67,6 +67,7 @@ Bundle 'tpope/vim-fugitive'
 
 " Color scheme
 Bundle 'altercation/vim-colors-solarized'
+Bundle 'ap/vim-css-color'
 
 
 " *********************************************
