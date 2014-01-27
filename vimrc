@@ -218,7 +218,7 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 
 " ctrlp.vim ignore
 set wildignore=*.o,*.obj,*~
-set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
+set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*,*/public/system/dragonfly/*
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules
 
 " Handlebars

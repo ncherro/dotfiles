@@ -13,3 +13,5 @@
   email = ncherro@gmail.com
 [credential]
   helper = osxkeychain
+[github]
+	user = ncherro
