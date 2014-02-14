@@ -157,7 +157,7 @@ killport() {
     # default (Rails-centric)
     port="3000"
   fi
-  pid=`lsof -wni tcp:$port | awk 'NR==2 { print $2 }'`
+  pid=`lsof -wni tcp:$port | grep 'ruby' | awk 'NR==1 { print $2 }'`
   if [ -n "${pid}" ]; then
     kill -9 $pid
     echo "Killed process $pid"
