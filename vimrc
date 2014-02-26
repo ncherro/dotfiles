@@ -229,6 +229,7 @@ au BufRead,BufNewFile *.html set ft=htmldjango
 au BufNewFile,BufRead *.ejs set ft=html.js
 au BufNewFile,BufRead *.slim set ft=slim
 au BufNewFile,BufRead Gemfile set ft=ruby
+au BufNewFile,BufRead *.cap set ft=ruby
 
 " flake8
 let g:flake8_ignore="E403,E128,F403"

@@ -92,9 +92,9 @@ tat() {
 alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend"
 
 
-# cd to the git root of the project you're in
+# cd to the git root, then cd one level up then back in to help RVM
 cd.() {
-  cd $(git rev-parse --show-toplevel)
+  cd $(git rev-parse --show-toplevel) && cd ../ && cd -;
 }
 
 # nginx
@@ -113,7 +113,7 @@ alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
 
 # PHP-FPM
 alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
-alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
+#alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
 php-stop() {
   if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
     echo "Stopping PHP-FPM..."
@@ -179,6 +179,9 @@ else
     eval `ssh-agent | tee ~/.agent.env`
     ssh-add
 fi
+
+
+alias v="vim"
 
 
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
