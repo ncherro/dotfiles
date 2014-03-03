@@ -201,7 +201,7 @@ map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe (shift-backslash)
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
-let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$']
+let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', '^spec\/dummy']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>

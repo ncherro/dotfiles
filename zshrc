@@ -107,6 +107,8 @@ alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
 
 
+alias redis-start="launchctl load ~/Library/LaunchAgents/homebrew.mxcl.redis.plist"
+
 # PHP-FPM
 alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
 alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
@@ -161,3 +163,4 @@ killport() {
 }
 
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
+ulimit -n 10000
