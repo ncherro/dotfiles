@@ -44,7 +44,7 @@ Bundle 'tpope/vim-surround'
 Bundle 'msanders/snipmate.vim'
 Bundle 'mattn/zencoding-vim'
 Bundle 'Raimondi/delimitMate'
-Bundle 'ervandew/supertab'
+"Bundle 'ervandew/supertab'
 Bundle 'vim-scripts/loremipsum'
 
 " Rails
@@ -67,6 +67,7 @@ Bundle 'tpope/vim-fugitive'
 
 " Color scheme
 Bundle 'altercation/vim-colors-solarized'
+Bundle 'ap/vim-css-color'
 
 
 " *********************************************
@@ -201,7 +202,7 @@ map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe (shift-backslash)
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
-let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', '^spec\/dummy']
+let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system', '^spec\/dummy']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -217,7 +218,7 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 
 " ctrlp.vim ignore
 set wildignore=*.o,*.obj,*~
-set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
+set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*,*/public/system/dragonfly/*
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules
 
 " Handlebars
@@ -226,7 +227,9 @@ au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
 " Override filetype
 au BufRead,BufNewFile *.html set ft=htmldjango
 au BufNewFile,BufRead *.ejs set ft=html.js
+au BufNewFile,BufRead *.slim set ft=slim
 au BufNewFile,BufRead Gemfile set ft=ruby
+au BufNewFile,BufRead *.cap set ft=ruby
 
 " flake8
 let g:flake8_ignore="E403,E128,F403"

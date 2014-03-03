@@ -26,6 +26,7 @@ PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}
 # /usr/local/ first, for homebrew
 PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
+export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
 # homebrew python
 export WORKON_HOME=$HOME/.virtualenvs
@@ -88,20 +89,23 @@ tat() {
 
 
 # mongodb
-alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend --config /usr/local/Cellar/mongodb/2.4.3-x86_64/mongod.conf"
+alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend"
 
 
-# cd to the git root of the project you're in
+# cd to the git root, then cd one level up then back in to help RVM
 cd.() {
-  cd $(git rev-parse --show-toplevel)
+  cd $(git rev-parse --show-toplevel) && cd ../ && cd -;
 }
 
 # nginx
 alias nginx-start="sudo nginx"
-alias nginx-stop="sudo /usr/local/sbin/nginx -s stop"
-alias nginx-reload="sudo /usr/local/sbin/nginx -s reload"
-alias nginx-restart="nginx-stop; nginx-start;"
+alias nginx-stop="sudo /usr/local/bin/nginx -s stop"
+alias nginx-reload="sudo /usr/local/bin/nginx -s reload"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
+nginx-restart() {
+  nginx-stop;
+  nginx-start;
+}
 
 # memcached
 alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
@@ -111,7 +115,7 @@ alias redis-start="launchctl load ~/Library/LaunchAgents/homebrew.mxcl.redis.pli
 
 # PHP-FPM
 alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
-alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
+#alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
 php-stop() {
   if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
     echo "Stopping PHP-FPM..."
@@ -143,6 +147,8 @@ php-reload() {
 # other aliases
 alias l="ls -alh"
 
+alias stamp="date +%F-%H%M%S"
+
 # disable autocorrect
 alias cap="nocorrect cap"
 
@@ -153,7 +159,7 @@ killport() {
     # default (Rails-centric)
     port="3000"
   fi
-  pid=`lsof -wni tcp:$port | awk 'NR==2 { print $2 }'`
+  pid=`lsof -wni tcp:$port | grep 'ruby' | awk 'NR==1 { print $2 }'`
   if [ -n "${pid}" ]; then
     kill -9 $pid
     echo "Killed process $pid"
@@ -161,6 +167,24 @@ killport() {
     echo "No processes were found listening on tcp:$port"
   fi
 }
+
+
+if [ -f ~/.agent.env ] ; then
+    . ~/.agent.env > /dev/null
+if ! kill -0 $SSH_AGENT_PID > /dev/null 2>&1; then
+    echo "Stale agent file found. Spawning new agent… "
+    eval `ssh-agent | tee ~/.agent.env`
+    ssh-add
+fi 
+else
+    echo "Starting ssh-agent"
+    eval `ssh-agent | tee ~/.agent.env`
+    ssh-add
+fi
+
+
+alias v="vim"
+
 
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
 ulimit -n 10000
