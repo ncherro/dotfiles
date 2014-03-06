@@ -185,6 +185,6 @@ fi
 
 alias v="vim"
 
-
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
+
 ulimit -n 10000

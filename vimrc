@@ -12,12 +12,13 @@ Bundle 'gmarik/vundle'
 
 " Navigation
 Bundle 'kien/ctrlp.vim'
-Bundle 'rking/ag.vim'
 Bundle 'scrooloose/nerdtree'
 Bundle 'vim-scripts/IndexedSearch'
 Bundle 'vim-scripts/matchit.zip'
 Bundle 'tpope/vim-unimpaired'
 Bundle 'jeetsukumaran/vim-buffergator'
+"Bundle 'rizzatti/greper.vim'
+Bundle 'rking/ag.vim'
 
 " Syntax
 Bundle 'scrooloose/syntastic'
@@ -40,12 +41,22 @@ Bundle 'editorconfig/editorconfig-vim'
 
 " Autocomplete
 Bundle 'tpope/vim-surround'
-"Bundle 'tpope/vim-endwise'
+Bundle 'tpope/vim-endwise'
 Bundle 'msanders/snipmate.vim'
 Bundle 'mattn/zencoding-vim'
 Bundle 'Raimondi/delimitMate'
-"Bundle 'ervandew/supertab'
+Bundle 'ervandew/supertab'
 Bundle 'vim-scripts/loremipsum'
+
+Bundle 'bling/vim-airline'
+Bundle 'rizzatti/funcoo.vim'
+Bundle 'rizzatti/dash.vim'
+Bundle 'SirVer/ultisnips'
+Bundle 'tpope/vim-rvm'
+Bundle 'tpope/vim-dispatch'
+
+" Git
+Bundle 'sjl/gundo.vim'
 
 " Rails
 Bundle 'tpope/vim-rails'
@@ -80,6 +91,18 @@ filetype plugin indent on         " load file type plugins + indentation
 set showcmd                       " Display incomplete commands.
 set showmode                      " Display the mode you're in.
 set showmatch                     " Show matching brackets/parenthesis
+
+" ctags
+set tags=tags;
+
+set noswapfile
+set nobackup
+set nowb
+
+set colorcolumn=80
+set cursorline
+
+set list listchars=tab:\ \ ,trail:·
 
 set nowrap                        " don't wrap lines
 set tabstop=2 shiftwidth=2        " a tab is two spaces (or set this to 4)
@@ -161,8 +184,33 @@ endfunction
 " *********************************************
 let mapleader = ","
 
+" ============================
+" Rails
+" ============================
+" Better key maps for switching between controller and view
+nnoremap ,vv :Rview<cr>
+nnoremap ,cc :Rcontroller<cr>
+
 " Clear last search highlighting
 nnoremap <Space> :noh<cr>
+
+" Create window splits easier. The default
+" way is Ctrl-w,v and Ctrl-w,s. I remap
+" this to vv and ss
+nnoremap <silent> vv <C-w>v
+nnoremap <silent> ss <C-w>s
+
+"Clear current search highlight by double tapping //
+nmap <silent> // :nohlsearch<CR>
+
+" Additional mapping for buffer search
+nnoremap <silent> ,b :CtrlPBuffer<cr>
+
+" ============================
+" Greeper
+" ============================
+nmap <silent> <leader>g :G<CR>
+
 
 " Easier navigation between split windows
 nnoremap <c-j> <c-w>j
