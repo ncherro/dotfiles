@@ -20,6 +20,10 @@ Coming soon...
 3. `ln -s /path/to/this/dir/vimrc ~/.vimrc`
 4. launch `vim` and run `:BundleInstall`
 
+#### Solarized color scheme
+
+if using iterm, make sure to install the [color presets](https://github.com/altercation/solarized/tree/master/iterm2-colors-solarized)
+
 ### Tmux
 
 1. install tmux

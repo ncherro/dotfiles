@@ -13,15 +13,13 @@ export ZSH_THEME="geoffgarside"
 # do not auto update .zsh
 DISABLE_AUTO_UPDATE="true"
 
-# Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
-# Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(rails git github ruby rails3)
+# plugins can be found in ~/.oh-my-zsh/plugins/*
+plugins=(rails git github ruby)
 
 source $ZSH/oh-my-zsh.sh
 
 # custom prompt
 PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}$(git_prompt_info) %(!.#.$) '
-
 
 # /usr/local/ first, for homebrew
 PATH=/usr/local/bin:/usr/local/sbin:$PATH
@@ -29,16 +27,16 @@ export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
 # homebrew python
-export WORKON_HOME=$HOME/.virtualenvs
-export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python2.7
-export VIRTUALENVWRAPPER_VIRTUALENV_ARGS='--no-site-packages'
-export PIP_VIRTUALENV_BASE=$WORKON_HOME
-export PIP_RESPECT_VIRTUALENV=true
-if [[ -r /usr/local/bin/virtualenvwrapper.sh ]]; then
-    source /usr/local/bin/virtualenvwrapper.sh
-else
-    echo "WARNING: Can't find virtualenvwrapper.sh"
-fi
+#export WORKON_HOME=$HOME/.virtualenvs
+#export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python2.7
+#export VIRTUALENVWRAPPER_VIRTUALENV_ARGS='--no-site-packages'
+#export PIP_VIRTUALENV_BASE=$WORKON_HOME
+#export PIP_RESPECT_VIRTUALENV=true
+#if [[ -r /usr/local/bin/virtualenvwrapper.sh ]]; then
+    #source /usr/local/bin/virtualenvwrapper.sh
+#else
+    #echo "WARNING: Can't find virtualenvwrapper.sh"
+#fi
 
 export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
@@ -48,8 +46,6 @@ export SHELL=/usr/local/bin/zsh
 
 # git
 export GIT_MERGE_AUTOEDIT=no
-
-
 
 # website stuff
 alias www='cd ~/Projects/www'
@@ -61,12 +57,6 @@ alias iphone='cd ~/Projects/iPhone'
 alias drushdump='drush sql-dump --result-file --gzip --structure-tables-key=common'
 alias flushcache='dscacheutil -flushcache'
 
-
-# Drupal stuff
-alias cc='drush cc all'
-alias fd='drush fd'
-
-
 # Postgres
 export PGDATA=/usr/local/var/postgres
 alias pg-start='pg_ctl -D /usr/local/var/postgres -l /usr/local/var/postgres/server.log start'
@@ -76,10 +66,10 @@ alias pg-stop-aspire='pg_ctl -D /usr/local/var/aspire stop -s -m fast'
 alias pg-start-namely='pg_ctl -D /usr/local/var/namely -l logfile start'
 alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 
+# Git
+alias gfa='git fetch --all'
 
 # RVM
-[[ -s "$HOME/.rvm/scripts/rvm" ]] && . "$HOME/.rvm/scripts/rvm"
-
 
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"
@@ -87,10 +77,8 @@ tat() {
   tmux at -t $1
 }
 
-
 # mongodb
 alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend"
-
 
 # cd to the git root, then cd one level up then back in to help RVM
 cd.() {
@@ -110,8 +98,7 @@ nginx-restart() {
 # memcached
 alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
 
-
-alias redis-start="launchctl load ~/Library/LaunchAgents/homebrew.mxcl.redis.plist"
+alias redis-start="redis-server /usr/local/etc/redis.conf"
 
 # PHP-FPM
 alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
@@ -168,7 +155,6 @@ killport() {
   fi
 }
 
-
 if [ -f ~/.agent.env ] ; then
     . ~/.agent.env > /dev/null
 if ! kill -0 $SSH_AGENT_PID > /dev/null 2>&1; then
@@ -182,9 +168,8 @@ else
     ssh-add
 fi
 
-
 alias v="vim"
 
-PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
-
 ulimit -n 10000
+
+PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
