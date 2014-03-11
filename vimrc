@@ -289,3 +289,15 @@ autocmd BufWritePost *.py call Flake8()
 if filereadable(expand('~/.vimrc.local'))
   so ~/.vimrc.local
 endif
+
+function! RSpecFile()
+  execute "Dispatch zeus rspec " . expand("%p")
+endfunction
+map <leader>R :call RSpecFile() <CR>
+command! RSpecFile call RSpecFile()
+
+function! RSpecCurrent()
+  execute "Dispatch zeus rspec " . expand("%p") . ":" . line(".")
+endfunction
+map <leader>r :call RSpecCurrent() <CR>
+command! RSpecCurrent call RSpecCurrent()
