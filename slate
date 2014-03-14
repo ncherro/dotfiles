@@ -42,6 +42,7 @@ bind p:cmd;alt focus 'Preview'
 bind o:cmd;alt focus 'Finder'
 bind t:cmd;alt focus 'Twitter'
 bind m:cmd;alt focus 'Airmail'
+bind y:cmd;alt focus 'Spotify'
 
 
 
