@@ -4,81 +4,86 @@ filetype off                      " Necessary on some Linux distros for pathogen
 " *********************************************
 " *          Vundle - Vim Plugins             *
 " *********************************************
-set rtp+=~/.vim/bundle/vundle/
-call vundle#rc()
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
 
 " Let Vundle manage Vundle
-Bundle 'gmarik/vundle'
+Plugin 'gmarik/vundle'
 
 " Navigation
-Bundle 'kien/ctrlp.vim'
-Bundle 'scrooloose/nerdtree'
-Bundle 'vim-scripts/IndexedSearch'
-Bundle 'vim-scripts/matchit.zip'
-Bundle 'tpope/vim-unimpaired'
-Bundle 'jeetsukumaran/vim-buffergator'
-"Bundle 'rizzatti/greper.vim'
-Bundle 'rking/ag.vim'
+Plugin 'kien/ctrlp.vim'
+Plugin 'scrooloose/nerdtree'
+Plugin 'vim-scripts/IndexedSearch'
+Plugin 'vim-scripts/matchit.zip'
+Plugin 'tpope/vim-unimpaired'
+Plugin 'jeetsukumaran/vim-buffergator'
+"Plugin 'rizzatti/greper.vim'
+Plugin 'rking/ag.vim'
 
 " Syntax
-Bundle 'scrooloose/syntastic'
-Bundle 'pangloss/vim-javascript'
-Bundle 'kchmck/vim-coffee-script'
-Bundle 'groenewege/vim-less'
-Bundle 'Handlebars'
-Bundle 'yaymukund/vim-rabl'
-Bundle 'slim-template/vim-slim'
+Plugin 'scrooloose/syntastic'
+Plugin 'pangloss/vim-javascript'
+Plugin 'kchmck/vim-coffee-script'
+Plugin 'groenewege/vim-less'
+Plugin 'Handlebars'
+Plugin 'yaymukund/vim-rabl'
+Plugin 'slim-template/vim-slim'
+Plugin 'ngmy/vim-rubocop'
+Plugin 'digitaltoad/vim-jade'
 
 " Gist
-Bundle 'mattn/webapi-vim'
-Bundle 'mattn/gist-vim'
+Plugin 'mattn/webapi-vim'
+Plugin 'mattn/gist-vim'
 
 " Formatting
-Bundle 'scrooloose/nerdcommenter'
-Bundle 'Align'
-Bundle 'godlygeek/tabular'
-Bundle 'editorconfig/editorconfig-vim'
+Plugin 'scrooloose/nerdcommenter'
+Plugin 'Align'
+Plugin 'godlygeek/tabular'
+Plugin 'editorconfig/editorconfig-vim'
 
 " Autocomplete
-Bundle 'tpope/vim-surround'
-Bundle 'tpope/vim-endwise'
-Bundle 'msanders/snipmate.vim'
-Bundle 'mattn/zencoding-vim'
-Bundle 'Raimondi/delimitMate'
-Bundle 'ervandew/supertab'
-Bundle 'vim-scripts/loremipsum'
+Plugin 'tpope/vim-surround'
+Plugin 'tpope/vim-endwise'
+Plugin 'msanders/snipmate.vim'
+Plugin 'mattn/zencoding-vim'
+Plugin 'Raimondi/delimitMate'
+Plugin 'ervandew/supertab'
+Plugin 'vim-scripts/loremipsum'
 
-Bundle 'bling/vim-airline'
-Bundle 'rizzatti/funcoo.vim'
-Bundle 'rizzatti/dash.vim'
-Bundle 'SirVer/ultisnips'
-Bundle 'tpope/vim-rvm'
-Bundle 'tpope/vim-dispatch'
+Plugin 'bling/vim-airline'
+Plugin 'rizzatti/funcoo.vim'
+Plugin 'rizzatti/dash.vim'
+Plugin 'SirVer/ultisnips'
+Plugin 'tpope/vim-rvm'
+Plugin 'tpope/vim-dispatch'
 
 " Git
-Bundle 'sjl/gundo.vim'
+Plugin 'sjl/gundo.vim'
 
 " Rails
-Bundle 'tpope/vim-rails'
-Bundle 'tpope/vim-rake'
-Bundle 'tpope/vim-haml'
+Plugin 'tpope/vim-rails'
+Plugin 'tpope/vim-rake'
+Plugin 'tpope/vim-haml'
 
 " Cucumber
-Bundle 'tpope/vim-cucumber'
-Bundle 'git://gist.github.com/287147.git'
+Plugin 'tpope/vim-cucumber'
+Plugin 'git://gist.github.com/287147.git'
 
 " Ruby
-Bundle 'skalnik/vim-vroom'
+Plugin 'skalnik/vim-vroom'
 
 " Python
-Bundle 'nvie/vim-flake8'
+Plugin 'nvie/vim-flake8'
 
 " Git
-Bundle 'tpope/vim-fugitive'
+Plugin 'tpope/vim-fugitive'
 
 " Color scheme
-Bundle 'altercation/vim-colors-solarized'
-Bundle 'ap/vim-css-color'
+Plugin 'altercation/vim-colors-solarized'
+Plugin 'ap/vim-css-color'
+
+call vundle#end()
+filetype plugin indent on
 
 
 " *********************************************

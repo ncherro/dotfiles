@@ -8,16 +8,6 @@ config windowHintsSpread true
 # Hints
 bind tab:cmd hint
 
-# Resize Bindings
-bind right:alt       resize +10% +0
-bind left:alt        resize -10% +0
-bind up:alt          resize +0   -10%
-bind down:alt        resize +0   +10%
-bind right:ctrl;alt  resize -10% +0 bottom-right
-bind left:ctrl;alt   resize +10% +0 bottom-right
-bind up:ctrl;alt     resize +0   +10% bottom-right
-bind down:ctrl;alt   resize +0   -10% bottom-right
-
 # Push Bindings
 bind l:ctrl;cmd push right bar-resize:screenSizeX/2
 bind h:ctrl;cmd push left  bar-resize:screenSizeX/2
@@ -28,23 +18,16 @@ bind j:ctrl;cmd push down  bar-resize:screenSizeY/2
 bind f:ctrl;cmd push left  bar-resize:screenSizeX
 
 # Focus Bindings
-bind right:cmd    focus right
-bind left:cmd     focus left
-bind up:cmd       focus up
-bind down:cmd     focus down
 bind up:cmd;alt   focus behind
 bind down:cmd;alt focus behind
-
 bind k:cmd;alt focus 'Google Chrome'
 bind j:cmd;alt focus 'iTerm'
 bind h:cmd;alt focus 'HipChat'
 bind p:cmd;alt focus 'Preview'
 bind o:cmd;alt focus 'Finder'
-bind t:cmd;alt focus 'Twitter'
 bind m:cmd;alt focus 'Airmail'
 bind y:cmd;alt focus 'Spotify'
-
-
+bind t:cmd;alt focus 'iTunes'
 
 
 # Window Hints
