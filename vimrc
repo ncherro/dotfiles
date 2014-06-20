@@ -307,4 +307,5 @@ endfunction
 map <leader>r :call RSpecCurrent() <CR>
 command! RSpecCurrent call RSpecCurrent()
 
+" redraw everything
 map <leader>d :redraw! <CR>
