@@ -5,6 +5,7 @@
 1. `brew install zsh`
 2. install [oh-my-zsh](https://github.com/robbyrussell/oh-my-zsh)
 3. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
+3. `ln -s /path/to/this/dir/env ~/.env`
 4. `source ~/.zshrc` or open a new shell
 
 ### Vim

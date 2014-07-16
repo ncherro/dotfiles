@@ -172,6 +172,13 @@ alias v="vim"
 
 ulimit -n 10000
 
-PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
+export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
 export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
+
+# set our env vars
+if [ -f ~/.env ]; then
+  source ~/.env
+else
+  print "~/.env file not found"
+fi
