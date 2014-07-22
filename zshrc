@@ -68,6 +68,7 @@ alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 
 # Git
 alias gfa='git fetch --all'
+alias gfu='git fetch upstream'
 
 # RVM
 
@@ -175,6 +176,10 @@ ulimit -n 10000
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
 export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
+
+deletemerged() {
+  git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
+}
 
 # set our env vars
 if [ -f ~/.env ]; then
