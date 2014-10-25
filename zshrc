@@ -177,9 +177,13 @@ export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
 export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
 
+alias npmgrunt="npm install && grunt server"
+
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
 }
+
+source /usr/local/share/zsh/site-functions/_aws
 
 # set our env vars
 if [ -f ~/.env ]; then

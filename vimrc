@@ -45,7 +45,7 @@ Plugin 'editorconfig/editorconfig-vim'
 Plugin 'tpope/vim-surround'
 Plugin 'tpope/vim-endwise'
 Plugin 'msanders/snipmate.vim'
-Plugin 'mattn/zencoding-vim'
+Plugin 'mattn/emmet-vim'
 Plugin 'Raimondi/delimitMate'
 Plugin 'ervandew/supertab'
 Plugin 'vim-scripts/loremipsum'
@@ -56,6 +56,8 @@ Plugin 'rizzatti/dash.vim'
 Plugin 'SirVer/ultisnips'
 Plugin 'tpope/vim-rvm'
 Plugin 'tpope/vim-dispatch'
+
+"Bundle 'Floobits/floobits-vim'
 
 " Git
 Plugin 'sjl/gundo.vim'
@@ -83,7 +85,6 @@ Plugin 'altercation/vim-colors-solarized'
 Plugin 'ap/vim-css-color'
 
 call vundle#end()
-filetype plugin indent on
 
 
 " *********************************************
@@ -149,7 +150,8 @@ set directory=/tmp                " Keep swap files in one location
 set timeoutlen=500
 
 set laststatus=2                  " Show the status line all the time
-set statusline=[%n]\ %<%.99f\ %h%w%m%r%y\ %{exists('*CapsLockStatusline')?CapsLockStatusline():''}%=%-16(\ %l,%c-%v\ %)%P
+" set statusline=[%n]\ %<%.99f\ %h%w%m%r%y\ %{exists('*CapsLockStatusline')?CapsLockStatusline():''}%=%-16(\ %l,%c-%v\ %)%P
+set statusline=%f
 
 set t_Co=256                      " Set terminal to 256 colors
 set background=dark
@@ -239,8 +241,10 @@ map <silent> <F7> mzgg=G'z :delmarks z<CR>:echo "Reformatted."<CR>
 
 " open files in directory of current file
 cnoremap %% <C-R>=expand('%:h').'/'<cr>
-map <leader>e :edit %%
 map <leader>v :view %%
+
+" execute current file
+map <leader>e :!%:p<cr>
 
 " rename current file
 map <leader>n :call RenameFile()<cr>
@@ -255,7 +259,7 @@ map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe (shift-backslash)
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
-let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system', '^spec\/dummy']
+let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system', '^spec\/dummy', '^bower_components']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -273,7 +277,7 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 set wildignore=*.o,*.obj,*~
 set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
 set wildignore+=*/public/system/dragonfly/,*/public/javascripts/*,*/public/stylesheets/*
-set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules
+set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules,bower_components
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
