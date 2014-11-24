@@ -21,7 +21,7 @@ bind f:ctrl;cmd push left  bar-resize:screenSizeX
 bind up:cmd;alt   focus behind
 bind down:cmd;alt focus behind
 bind k:cmd;alt focus 'Google Chrome'
-bind j:cmd;alt focus 'iTerm'
+bind j:cmd;alt focus 'Terminal'
 bind h:cmd;alt focus 'HipChat'
 bind p:cmd;alt focus 'Preview'
 bind o:cmd;alt focus 'Finder'
@@ -34,7 +34,7 @@ bind t:cmd;alt focus 'iTunes'
 bind esc:cmd hint
 
 # Toggle applications
-bind j:ctrl;cmd toggle 'iTerm'
+bind j:ctrl;cmd toggle 'Terminal'
 bind k:ctrl;cmd toggle 'Google Chrome'
 
 # Reload slate

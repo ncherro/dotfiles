@@ -54,8 +54,6 @@ alias profiles='open ~/profiles.tmproj'
 alias ts='date +"%F_%T"' # prints a timestamp - e.g. echo "asdf`ts`"
 alias projects='cd ~/Projects'
 alias iphone='cd ~/Projects/iPhone'
-alias drushdump='drush sql-dump --result-file --gzip --structure-tables-key=common'
-alias flushcache='dscacheutil -flushcache'
 
 # Postgres
 export PGDATA=/usr/local/var/postgres
@@ -69,8 +67,6 @@ alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
 # Git
 alias gfa='git fetch --all'
 alias gfu='git fetch upstream'
-
-# RVM
 
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"
@@ -170,10 +166,14 @@ else
 fi
 
 alias v="vim"
+alias z="zeus"
+alias zc="zeus c"
+alias zs="zeus s"
 
 ulimit -n 10000
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
+source $HOME/.rvm/scripts/rvm
 
 export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
 

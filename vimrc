@@ -49,6 +49,7 @@ Plugin 'mattn/emmet-vim'
 Plugin 'Raimondi/delimitMate'
 Plugin 'ervandew/supertab'
 Plugin 'vim-scripts/loremipsum'
+Plugin 'Valloric/YouCompleteMe'
 
 Plugin 'bling/vim-airline'
 Plugin 'rizzatti/funcoo.vim'
@@ -213,10 +214,26 @@ nmap <silent> // :nohlsearch<CR>
 " Additional mapping for buffer search
 nnoremap <silent> ,b :CtrlPBuffer<cr>
 
+" Flip buffers
+nnoremap <Leader>l :ls<CR>
+nnoremap <Leader>b :bp<CR>
+nnoremap <Leader>f :bn<CR>
+nnoremap <Leader>g :e#<CR>
+nnoremap <Leader>1 :1b<CR>
+nnoremap <Leader>2 :2b<CR>
+nnoremap <Leader>3 :3b<CR>
+nnoremap <Leader>4 :4b<CR>
+nnoremap <Leader>5 :5b<CR>
+nnoremap <Leader>6 :6b<CR>
+nnoremap <Leader>7 :7b<CR>
+nnoremap <Leader>8 :8b<CR>
+nnoremap <Leader>9 :9b<CR>
+nnoremap <Leader>0 :10b<CR>
+
 " ============================
 " Greeper
 " ============================
-nmap <silent> <leader>g :G<CR>
+"nmap <silent> <leader>g :G<CR>
 
 
 " Easier navigation between split windows
@@ -314,3 +331,7 @@ command! RSpecCurrent call RSpecCurrent()
 
 " redraw everything
 map <leader>d :redraw! <CR>
+
+" vim-airline
+let g:airline_left_sep=''
+let g:airline_right_sep=''
