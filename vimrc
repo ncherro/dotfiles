@@ -49,7 +49,7 @@ Plugin 'mattn/emmet-vim'
 Plugin 'Raimondi/delimitMate'
 Plugin 'ervandew/supertab'
 Plugin 'vim-scripts/loremipsum'
-Plugin 'Valloric/YouCompleteMe'
+"Plugin 'Valloric/YouCompleteMe'
 
 Plugin 'bling/vim-airline'
 Plugin 'rizzatti/funcoo.vim'
@@ -81,8 +81,9 @@ Plugin 'nvie/vim-flake8'
 " Git
 Plugin 'tpope/vim-fugitive'
 
-" Color scheme
+" Color schemes
 Plugin 'altercation/vim-colors-solarized'
+Plugin 'morhetz/gruvbox'
 Plugin 'ap/vim-css-color'
 
 call vundle#end()
@@ -154,9 +155,11 @@ set laststatus=2                  " Show the status line all the time
 " set statusline=[%n]\ %<%.99f\ %h%w%m%r%y\ %{exists('*CapsLockStatusline')?CapsLockStatusline():''}%=%-16(\ %l,%c-%v\ %)%P
 set statusline=%f
 
-set t_Co=256                      " Set terminal to 256 colors
+
 set background=dark
+"let g:solarized_termcolors=16
 colorscheme solarized
+
 
 autocmd FileType python setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
 

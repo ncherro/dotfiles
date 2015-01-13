@@ -172,10 +172,9 @@ alias zs="zeus s"
 
 ulimit -n 10000
 
-export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
-source $HOME/.rvm/scripts/rvm
-
 export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
+
+eval "$(rbenv init -)"
 
 alias npmgrunt="npm install && grunt server"
 
@@ -185,9 +184,13 @@ deletemerged() {
 
 source /usr/local/share/zsh/site-functions/_aws
 
+export CLICOLOR=1
+
 # set our env vars
 if [ -f ~/.env ]; then
   source ~/.env
 else
   print "~/.env file not found"
 fi
+### Added by the Heroku Toolbelt
+export PATH="/usr/local/heroku/bin:$PATH"
