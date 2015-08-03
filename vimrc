@@ -29,7 +29,8 @@ Plugin 'Handlebars'
 Plugin 'yaymukund/vim-rabl'
 Plugin 'slim-template/vim-slim'
 Plugin 'ngmy/vim-rubocop'
-Plugin 'digitaltoad/vim-jade'
+Plugin 'mtscout6/vim-cjsx'
+Plugin 'mxw/vim-jsx'
 
 " Gist
 Plugin 'mattn/webapi-vim'
@@ -279,7 +280,7 @@ map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe (shift-backslash)
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
-let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system', '^spec\/dummy', '^bower_components']
+let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system', 'javascripts\/bundle', '^spec\/dummy', '^bower_components']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -298,6 +299,7 @@ set wildignore=*.o,*.obj,*~
 set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
 set wildignore+=*/public/system/dragonfly/,*/public/javascripts/*,*/public/stylesheets/*
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules,bower_components
+set wildignore+=*/javascripts/bundle/*,*.min.*
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars

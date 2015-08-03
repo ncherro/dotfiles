@@ -26,18 +26,6 @@ PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
-# homebrew python
-#export WORKON_HOME=$HOME/.virtualenvs
-#export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python2.7
-#export VIRTUALENVWRAPPER_VIRTUALENV_ARGS='--no-site-packages'
-#export PIP_VIRTUALENV_BASE=$WORKON_HOME
-#export PIP_RESPECT_VIRTUALENV=true
-#if [[ -r /usr/local/bin/virtualenvwrapper.sh ]]; then
-    #source /usr/local/bin/virtualenvwrapper.sh
-#else
-    #echo "WARNING: Can't find virtualenvwrapper.sh"
-#fi
-
 export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -96,6 +84,7 @@ nginx-restart() {
 alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
 
 alias redis-start="redis-server /usr/local/etc/redis.conf"
+alias flushredis="echo 'FLUSHALL' | redis-cli"
 
 # PHP-FPM
 alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
@@ -168,7 +157,10 @@ fi
 alias v="vim"
 alias z="zeus"
 alias zc="zeus c"
-alias zs="zeus s"
+alias zs="zeus start"
+alias zr="zeus s"
+alias zmig="zeus rake db:migrate"
+alias zt="unset AWS_SECRET_ACCESS_KEY && unset AWS_ACCESS_KEY_ID && zeus rspec spec"
 
 ulimit -n 10000
 
@@ -185,6 +177,9 @@ deletemerged() {
 source /usr/local/share/zsh/site-functions/_aws
 
 export CLICOLOR=1
+
+# nodejs modules
+export NODE_PATH=/usr/local/lib/node_modules
 
 # set our env vars
 if [ -f ~/.env ]; then
