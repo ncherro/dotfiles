@@ -26,7 +26,7 @@ PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
-export EDITOR='vim'
+export EDITOR='nvim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/New_York
@@ -58,6 +58,7 @@ alias gfu='git fetch upstream'
 
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"
+alias tls="tmux ls"
 tat() {
   tmux at -t $1
 }
@@ -154,7 +155,7 @@ else
     ssh-add
 fi
 
-alias v="vim"
+alias v="nvim"
 alias z="zeus"
 alias zc="zeus c"
 alias zs="zeus start"
@@ -189,3 +190,17 @@ else
 fi
 ### Added by the Heroku Toolbelt
 export PATH="/usr/local/heroku/bin:$PATH"
+export ANDROID_HOME=/usr/local/opt/android-sdk
+
+## Go
+export GOPATH=$HOME/golang
+export GOROOT=/usr/local/opt/go/libexec
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$GOROOT/bin
+
+export FZF_DEFAULT_COMMAND='
+  (git ls-tree -r --name-only HEAD ||
+       find . -path "*/\.*" -prune -o -type f -print -o -type l -print |
+        sed s/^..//) 2> /dev/null'
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

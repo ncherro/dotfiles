@@ -1,93 +1,95 @@
-set nocompatible                  " Must come first because it changes other options.
-filetype off                      " Necessary on some Linux distros for pathogen to properly load bundles
-
 " *********************************************
 " *          Vundle - Vim Plugins             *
 " *********************************************
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
+call plug#begin()
 
 " Let Vundle manage Vundle
-Plugin 'gmarik/vundle'
+Plug 'gmarik/vundle'
 
 " Navigation
-Plugin 'kien/ctrlp.vim'
-Plugin 'scrooloose/nerdtree'
-Plugin 'vim-scripts/IndexedSearch'
-Plugin 'vim-scripts/matchit.zip'
-Plugin 'tpope/vim-unimpaired'
-Plugin 'jeetsukumaran/vim-buffergator'
-"Plugin 'rizzatti/greper.vim'
-Plugin 'rking/ag.vim'
+Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+Plug 'junegunn/fzf.vim'
+Plug 'scrooloose/nerdtree'
+Plug 'vim-scripts/IndexedSearch'
+Plug 'vim-scripts/matchit.zip'
+Plug 'tpope/vim-unimpaired'
+Plug 'jeetsukumaran/vim-buffergator'
 
 " Syntax
-Plugin 'scrooloose/syntastic'
-Plugin 'pangloss/vim-javascript'
-Plugin 'kchmck/vim-coffee-script'
-Plugin 'groenewege/vim-less'
-Plugin 'Handlebars'
-Plugin 'yaymukund/vim-rabl'
-Plugin 'slim-template/vim-slim'
-Plugin 'ngmy/vim-rubocop'
-Plugin 'mtscout6/vim-cjsx'
-Plugin 'mxw/vim-jsx'
+Plug 'scrooloose/syntastic'
+Plug 'pangloss/vim-javascript'
+Plug 'kchmck/vim-coffee-script'
+Plug 'groenewege/vim-less'
+Plug 'Handlebars'
+Plug 'yaymukund/vim-rabl'
+Plug 'slim-template/vim-slim'
+Plug 'ngmy/vim-rubocop'
+Plug 'mtscout6/vim-cjsx'
+Plug 'mxw/vim-jsx'
+Plug 'fatih/vim-go'
 
 " Gist
-Plugin 'mattn/webapi-vim'
-Plugin 'mattn/gist-vim'
+Plug 'mattn/webapi-vim'
+Plug 'mattn/gist-vim'
 
 " Formatting
-Plugin 'scrooloose/nerdcommenter'
-Plugin 'Align'
-Plugin 'godlygeek/tabular'
-Plugin 'editorconfig/editorconfig-vim'
+Plug 'scrooloose/nerdcommenter'
+Plug 'Align'
+Plug 'godlygeek/tabular'
+Plug 'editorconfig/editorconfig-vim'
 
 " Autocomplete
-Plugin 'tpope/vim-surround'
-Plugin 'tpope/vim-endwise'
-Plugin 'msanders/snipmate.vim'
-Plugin 'mattn/emmet-vim'
-Plugin 'Raimondi/delimitMate'
-Plugin 'ervandew/supertab'
-Plugin 'vim-scripts/loremipsum'
-"Plugin 'Valloric/YouCompleteMe'
+Plug 'tpope/vim-surround'
+Plug 'tpope/vim-endwise'
+Plug 'msanders/snipmate.vim'
+Plug 'mattn/emmet-vim'
+Plug 'Raimondi/delimitMate'
+Plug 'ervandew/supertab'
+Plug 'vim-scripts/loremipsum'
+"Plug 'Valloric/YouCompleteMe'
 
-Plugin 'bling/vim-airline'
-Plugin 'rizzatti/funcoo.vim'
-Plugin 'rizzatti/dash.vim'
-Plugin 'SirVer/ultisnips'
-Plugin 'tpope/vim-rvm'
-Plugin 'tpope/vim-dispatch'
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
+Plug 'rizzatti/funcoo.vim'
+Plug 'rizzatti/dash.vim'
+Plug 'tpope/vim-rvm'
+Plug 'tpope/vim-dispatch'
 
-"Bundle 'Floobits/floobits-vim'
+"Plug 'Floobits/floobits-vim'
 
 " Git
-Plugin 'sjl/gundo.vim'
+Plug 'sjl/gundo.vim'
 
 " Rails
-Plugin 'tpope/vim-rails'
-Plugin 'tpope/vim-rake'
-Plugin 'tpope/vim-haml'
+Plug 'tpope/vim-rails'
+Plug 'tpope/vim-rake'
+Plug 'tpope/vim-haml'
 
 " Cucumber
-Plugin 'tpope/vim-cucumber'
-Plugin 'git://gist.github.com/287147.git'
+Plug 'tpope/vim-cucumber'
+Plug 'git://gist.github.com/287147.git'
 
 " Ruby
-Plugin 'skalnik/vim-vroom'
+Plug 'skalnik/vim-vroom'
+
+" Elixir
+Plug 'elixir-lang/vim-elixir'
 
 " Python
-Plugin 'nvie/vim-flake8'
+Plug 'nvie/vim-flake8'
 
 " Git
-Plugin 'tpope/vim-fugitive'
+Plug 'tpope/vim-fugitive'
+
+" JS tests
+Plug 'janko-m/vim-test'
 
 " Color schemes
-Plugin 'altercation/vim-colors-solarized'
-Plugin 'morhetz/gruvbox'
-Plugin 'ap/vim-css-color'
+Plug 'altercation/vim-colors-solarized'
+Plug 'morhetz/gruvbox'
+Plug 'ap/vim-css-color'
 
-call vundle#end()
+call plug#end()
 
 
 " *********************************************
@@ -144,7 +146,9 @@ set sidescrolloff=7
 
 set mouse-=a
 set mousehide
-set ttymouse=xterm2
+if !has('nvim')
+  set ttymouse=xterm2
+endif
 set sidescroll=1
 
 set nobackup                      " Don't make a backup before overwriting a file.
@@ -158,7 +162,7 @@ set statusline=%f
 
 
 set background=dark
-"let g:solarized_termcolors=16
+" let g:solarized_termcolors=16
 colorscheme solarized
 
 
@@ -214,9 +218,6 @@ nnoremap <silent> ss <C-w>s
 
 "Clear current search highlight by double tapping //
 nmap <silent> // :nohlsearch<CR>
-
-" Additional mapping for buffer search
-nnoremap <silent> ,b :CtrlPBuffer<cr>
 
 " Flip buffers
 nnoremap <Leader>l :ls<CR>
@@ -277,10 +278,12 @@ vmap <leader>a :call AckVisual()<CR>
 
 " File tree browser - backslash
 map \ :NERDTreeToggle<CR>
-" File tree browser showing current file - pipe (shift-backslash)
+" File tree browser showing current file - pipe
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
-let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system', 'javascripts\/bundle', '^spec\/dummy', '^bower_components']
+let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
+      \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '^dist',
+      \ '^build', '^lib', '^styleguide-build', '^styleguide-dist']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -293,13 +296,6 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 " *********************************************
 " *           Plugin Customization            *
 " *********************************************
-
-" ctrlp.vim ignore
-set wildignore=*.o,*.obj,*~
-set wildignore+=*/.git/*,*/.hg/*,*/.svn/*,*/public/cache/*
-set wildignore+=*/public/system/dragonfly/,*/public/javascripts/*,*/public/stylesheets/*
-set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.log,*.pyc,node_modules,bower_components
-set wildignore+=*/javascripts/bundle/*,*.min.*
 
 " Handlebars
 au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
@@ -334,9 +330,21 @@ endfunction
 map <leader>r :call RSpecCurrent() <CR>
 command! RSpecCurrent call RSpecCurrent()
 
+let g:test#strategy = 'dispatch'
+let g:test#runner_commands = ['Mocha']
+let test#javascript#mocha#options = '--compilers js:babel-core/register --recursive'
+
 " redraw everything
 map <leader>d :redraw! <CR>
 
 " vim-airline
 let g:airline_left_sep=''
 let g:airline_right_sep=''
+
+" vim-jsx
+let g:jsx_ext_required = 0
+
+" fzf
+nnoremap <Leader>ff :GitFiles<CR>
+nnoremap <Leader>fb :Buffers<CR>
+nnoremap <Leader>fa :Ag<Space>
