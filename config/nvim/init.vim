@@ -95,7 +95,6 @@ call plug#end()
 " *********************************************
 " *                 Settings                  *
 " *********************************************
-set encoding=utf-8
 syntax enable
 filetype plugin indent on         " load file type plugins + indentation
 
@@ -148,6 +147,9 @@ set mouse-=a
 set mousehide
 if !has('nvim')
   set ttymouse=xterm2
+endif
+if has('nvim')
+  nmap <BS> <C-W>h
 endif
 set sidescroll=1
 
@@ -242,10 +244,10 @@ nnoremap <Leader>0 :10b<CR>
 
 
 " Easier navigation between split windows
-nnoremap <c-j> <c-w>j
-nnoremap <c-k> <c-w>k
-nnoremap <c-h> <c-w>h
-nnoremap <c-l> <c-w>l
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-h> <C-w>h
+nnoremap <C-l> <C-w>l
 
 " Insert blank lines without going into insert mode
 nmap go o<esc>
@@ -348,3 +350,4 @@ let g:jsx_ext_required = 0
 nnoremap <Leader>ff :GitFiles<CR>
 nnoremap <Leader>fb :Buffers<CR>
 nnoremap <Leader>fa :Ag<Space>
+nnoremap <C-p> :GitFiles<CR>
