@@ -27,6 +27,7 @@ Plug 'ngmy/vim-rubocop'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
 Plug 'fatih/vim-go'
+Plug 'editorconfig/editorconfig-vim'
 
 " Gist
 Plug 'mattn/webapi-vim'
@@ -218,6 +219,10 @@ nnoremap <Space> :noh<cr>
 nnoremap <silent> vv <C-w>v
 nnoremap <silent> ss <C-w>s
 
+" paste / nopaste
+nnoremap <silent> pp :set paste<CR>
+nnoremap <silent> np :set nopaste<CR>
+
 "Clear current search highlight by double tapping //
 nmap <silent> // :nohlsearch<CR>
 
@@ -285,7 +290,7 @@ map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
 let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '^dist',
-      \ '^build', '^lib', '^styleguide-build', '^styleguide-dist']
+      \ '^build', '^styleguide-build', '^styleguide-dist']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>

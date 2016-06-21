@@ -34,6 +34,11 @@ export SHELL=/usr/local/bin/zsh
 
 # git
 export GIT_MERGE_AUTOEDIT=no
+alias g-='gco -'
+gpp() {
+  current_branch = $(git name-rev --name-only HEAD)
+  eval "git push --set-upstream origin $current_branch"
+}
 
 # website stuff
 alias www='cd ~/Projects/www'
@@ -190,7 +195,6 @@ else
 fi
 ### Added by the Heroku Toolbelt
 export PATH="/usr/local/heroku/bin:$PATH"
-export ANDROID_HOME=/usr/local/opt/android-sdk
 
 ## Go
 export GOPATH=$HOME/golang
@@ -204,3 +208,17 @@ export FZF_DEFAULT_COMMAND='
         sed s/^..//) 2> /dev/null'
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
+export PATH="$HOME/.exenv/bin:$PATH"
+eval "$(exenv init -)"
+
+alias gti="git"
+
+eval `docker-machine env 2>/dev/null`
+
+## Android development
+export ANDROID_HOME=$HOME/Library/Android/sdk
+PATH="$HOME/Library/Android/sdk/tools:$HOME/Library/Android/sdk/platform-tools:${PATH}"
+export PATH
+
