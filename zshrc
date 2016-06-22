@@ -36,8 +36,7 @@ export SHELL=/usr/local/bin/zsh
 export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
 gpp() {
-  current_branch = $(git name-rev --name-only HEAD)
-  eval "git push --set-upstream origin $current_branch"
+  eval "git push --set-upstream origin $(git name-rev --name-only HEAD)"
 }
 
 # website stuff
