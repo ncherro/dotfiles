@@ -10,9 +10,6 @@ export ZSH=$HOME/.oh-my-zsh
 # Look in ~/.oh-my-zsh/themes/
 export ZSH_THEME="geoffgarside"
 
-# do not auto update .zsh
-DISABLE_AUTO_UPDATE="true"
-
 # plugins can be found in ~/.oh-my-zsh/plugins/*
 plugins=(rails git github ruby)
 

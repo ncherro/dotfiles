@@ -28,6 +28,7 @@ Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
 Plug 'fatih/vim-go'
 Plug 'editorconfig/editorconfig-vim'
+"Plug 'facebook/vim-flow', { 'autoload' : { 'filetypes' : 'javascript' } }
 
 " Gist
 Plug 'mattn/webapi-vim'
@@ -219,9 +220,8 @@ nnoremap <Space> :noh<cr>
 nnoremap <silent> vv <C-w>v
 nnoremap <silent> ss <C-w>s
 
-" paste / nopaste
-nnoremap <silent> pp :set paste<CR>
-nnoremap <silent> np :set nopaste<CR>
+" paste
+nnoremap <silent> pp :read !pbpaste<CR>
 
 "Clear current search highlight by double tapping //
 nmap <silent> // :nohlsearch<CR>
