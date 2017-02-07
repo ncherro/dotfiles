@@ -29,6 +29,7 @@ export LANG=en_US.UTF-8
 export TZ=America/New_York
 export SHELL=/usr/local/bin/zsh
 
+
 # git
 export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
@@ -38,6 +39,7 @@ gpp() {
 
 # website stuff
 alias www='cd ~/Projects/www'
+alias mm='cd ~/Projects/www/mikmak'
 alias flash='cd ~/Projects/Flash'
 alias profiles='open ~/profiles.tmproj'
 alias ts='date +"%F_%T"' # prints a timestamp - e.g. echo "asdf`ts`"
@@ -48,10 +50,7 @@ alias iphone='cd ~/Projects/iPhone'
 export PGDATA=/usr/local/var/postgres
 alias pg-start='pg_ctl -D /usr/local/var/postgres -l /usr/local/var/postgres/server.log start'
 alias pg-stop='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
-alias pg-start-aspire='pg_ctl -D /usr/local/var/aspire -l logfile start'
-alias pg-stop-aspire='pg_ctl -D /usr/local/var/aspire stop -s -m fast'
-alias pg-start-namely='pg_ctl -D /usr/local/var/namely -l logfile start'
-alias pg-stop-namely='pg_ctl -D /usr/local/var/namely stop -s -m fast'
+alias pg-status='pg_ctl -D /usr/local/var/postgres status'
 
 # Git
 alias gfa='git fetch --all'
@@ -60,8 +59,12 @@ alias gfu='git fetch upstream'
 # tmux with 256 colors
 alias tmux="TERM=screen-256color-bce tmux"
 alias tls="tmux ls"
-tat() {
+alias tat="tmux at"
+tatt() {
   tmux at -t $1
+}
+tns() {
+  tmux new -s $1
 }
 
 # mongodb
@@ -205,7 +208,7 @@ export FZF_DEFAULT_COMMAND='
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
+#alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
 export PATH="$HOME/.exenv/bin:$PATH"
 eval "$(exenv init -)"
 
@@ -217,4 +220,8 @@ eval `docker-machine env 2>/dev/null`
 export ANDROID_HOME=$HOME/Library/Android/sdk
 PATH="$HOME/Library/Android/sdk/tools:$HOME/Library/Android/sdk/platform-tools:${PATH}"
 export PATH
+
+function exportFile() {
+  set -o allexport; source $1; set +o allexport;
+}
 

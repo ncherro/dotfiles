@@ -16,7 +16,7 @@ Plug 'tpope/vim-unimpaired'
 Plug 'jeetsukumaran/vim-buffergator'
 
 " Syntax
-Plug 'scrooloose/syntastic'
+"Plug 'scrooloose/syntastic'
 Plug 'pangloss/vim-javascript'
 Plug 'kchmck/vim-coffee-script'
 Plug 'groenewege/vim-less'
@@ -28,6 +28,7 @@ Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
 Plug 'fatih/vim-go'
 Plug 'editorconfig/editorconfig-vim'
+Plug 'cespare/vim-toml'
 "Plug 'facebook/vim-flow', { 'autoload' : { 'filetypes' : 'javascript' } }
 
 " Gist
@@ -90,6 +91,9 @@ Plug 'janko-m/vim-test'
 Plug 'altercation/vim-colors-solarized'
 Plug 'morhetz/gruvbox'
 Plug 'ap/vim-css-color'
+
+" Async linting
+Plug 'w0rp/ale'
 
 call plug#end()
 
@@ -318,6 +322,9 @@ au BufNewFile,BufRead *.cap set ft=ruby
 let g:flake8_ignore="E403,E128,F403"
 autocmd BufWritePost *.py call Flake8()
 
+" syntax alias
+autocmd BufNewFile,BufRead *.conf set syntax=config
+
 " *********************************************
 " *        Local Vimrc Customization          *
 " *********************************************
@@ -356,3 +363,10 @@ nnoremap <Leader>ff :GitFiles<CR>
 nnoremap <Leader>fb :Buffers<CR>
 nnoremap <Leader>fa :Ag<Space>
 nnoremap <C-p> :GitFiles<CR>
+
+
+" datetime
+" TODO: figure out how to get colon into the %z for iso
+:nnoremap <F5> "=strftime("%FT%T%z")<CR>P
+:inoremap <F5> <C-R>=strftime("%FT%T%z")<CR>
+
