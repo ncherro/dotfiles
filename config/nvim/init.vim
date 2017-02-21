@@ -138,6 +138,7 @@ set nofoldenable                  "dont fold by default
 
 set hidden                        " Handle multiple buffers better.
 set title                         " Set the terminal's title
+set relativenumber                " Show relative line numbers"
 set number                        " Show line numbers.
 set ruler                         " Show cursor position.
 set wildmode=list:longest         " Complete files like a shell.
