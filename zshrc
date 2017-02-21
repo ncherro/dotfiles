@@ -38,9 +38,7 @@ gpp() {
 }
 
 # website stuff
-alias www='cd ~/Projects/www'
-alias mm='cd ~/Projects/www/mikmak'
-alias flash='cd ~/Projects/Flash'
+alias nm='cd ~/Projects/namely'
 alias profiles='open ~/profiles.tmproj'
 alias ts='date +"%F_%T"' # prints a timestamp - e.g. echo "asdf`ts`"
 alias projects='cd ~/Projects'
@@ -56,8 +54,6 @@ alias pg-status='pg_ctl -D /usr/local/var/postgres status'
 alias gfa='git fetch --all'
 alias gfu='git fetch upstream'
 
-# tmux with 256 colors
-alias tmux="TERM=screen-256color-bce tmux"
 alias tls="tmux ls"
 alias tat="tmux at"
 tatt() {
@@ -210,7 +206,7 @@ export FZF_DEFAULT_COMMAND='
 
 #alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
 export PATH="$HOME/.exenv/bin:$PATH"
-eval "$(exenv init -)"
+#eval "$(exenv init -)"
 
 alias gti="git"
 
