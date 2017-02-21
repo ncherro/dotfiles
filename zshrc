@@ -62,6 +62,10 @@ tatt() {
 tns() {
   tmux new -s $1
 }
+tnss() {
+  dirname=${PWD##*/}
+  tmux new -s $dirname
+}
 
 # mongodb
 alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend"
