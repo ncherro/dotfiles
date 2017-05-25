@@ -14,6 +14,7 @@ Plug 'vim-scripts/IndexedSearch'
 Plug 'vim-scripts/matchit.zip'
 Plug 'tpope/vim-unimpaired'
 Plug 'jeetsukumaran/vim-buffergator'
+Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax
 "Plug 'scrooloose/syntastic'
@@ -70,7 +71,7 @@ Plug 'tpope/vim-haml'
 
 " Cucumber
 Plug 'tpope/vim-cucumber'
-Plug 'git://gist.github.com/287147.git'
+"Plug 'git://gist.github.com/287147.git'
 
 " Ruby
 Plug 'skalnik/vim-vroom'
@@ -89,6 +90,7 @@ Plug 'janko-m/vim-test'
 
 " Color schemes
 Plug 'altercation/vim-colors-solarized'
+Plug 'w0ng/vim-hybrid'
 Plug 'morhetz/gruvbox'
 Plug 'ap/vim-css-color'
 
@@ -109,7 +111,7 @@ set showmode                      " Display the mode you're in.
 set showmatch                     " Show matching brackets/parenthesis
 
 " ctags
-set tags=tags;
+set tags=tags
 
 set noswapfile
 set nobackup
@@ -170,9 +172,11 @@ set laststatus=2                  " Show the status line all the time
 set statusline=%f
 
 
+" color scheme
 set background=dark
-" let g:solarized_termcolors=16
-colorscheme solarized
+let g:hybrid_custom_term_colors = 1
+let g:hybrid_reduced_contrast = 1 " Remove this line if using the default palette.
+colorscheme hybrid
 
 
 autocmd FileType python setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
@@ -293,9 +297,11 @@ map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe
 map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
+let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '^dist',
-      \ '^build', '^styleguide-build', '^styleguide-dist']
+      \ '^build', '^styleguide-build', '^styleguide-dist', '\.git',
+      \ '\.DS_Store', '\.vscode']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -318,6 +324,7 @@ au BufNewFile,BufRead *.ejs set ft=html.js
 au BufNewFile,BufRead *.slim set ft=slim
 au BufNewFile,BufRead Gemfile set ft=ruby
 au BufNewFile,BufRead *.cap set ft=ruby
+au BufNewFile,BufRead *.config set ft=zsh
 
 " flake8
 let g:flake8_ignore="E403,E128,F403"
@@ -334,13 +341,13 @@ if filereadable(expand('~/.vimrc.local'))
 endif
 
 function! RSpecFile()
-  execute "Dispatch zeus rspec " . expand("%p")
+  execute "Dispatch docker-compose exec app rspec " . expand("%p")
 endfunction
 map <leader>R :call RSpecFile() <CR>
 command! RSpecFile call RSpecFile()
 
 function! RSpecCurrent()
-  execute "Dispatch zeus rspec " . expand("%p") . ":" . line(".")
+  execute "Dispatch docker-compose exec app rspec " . expand("%p") . ":" . line(".")
 endfunction
 map <leader>r :call RSpecCurrent() <CR>
 command! RSpecCurrent call RSpecCurrent()
@@ -371,3 +378,5 @@ nnoremap <C-p> :GitFiles<CR>
 :nnoremap <F5> "=strftime("%FT%T%z")<CR>P
 :inoremap <F5> <C-R>=strftime("%FT%T%z")<CR>
 
+
+map <Leader>cf :!docker-compose run app cucumber %<cr>

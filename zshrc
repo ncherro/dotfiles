@@ -38,7 +38,6 @@ gpp() {
 }
 
 # website stuff
-alias nm='cd ~/Projects/namely'
 alias profiles='open ~/profiles.tmproj'
 alias ts='date +"%F_%T"' # prints a timestamp - e.g. echo "asdf`ts`"
 alias projects='cd ~/Projects'
@@ -167,11 +166,11 @@ alias zr="zeus s"
 alias zmig="zeus rake db:migrate"
 alias zt="unset AWS_SECRET_ACCESS_KEY && unset AWS_ACCESS_KEY_ID && zeus rspec spec"
 
+alias venv='. ./venv/bin/activate'
+
 ulimit -n 10000
 
-export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
-
-eval "$(rbenv init -)"
+#export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
 
 alias npmgrunt="npm install && grunt server"
 
@@ -196,6 +195,8 @@ fi
 export PATH="/usr/local/heroku/bin:$PATH"
 
 ## Go
+# temporary 1.7 override
+# https://github.com/golang/go/issues/18172
 export GOPATH=$HOME/golang
 export GOROOT=/usr/local/opt/go/libexec
 export PATH=$PATH:$GOPATH/bin
@@ -214,7 +215,6 @@ export PATH="$HOME/.exenv/bin:$PATH"
 
 alias gti="git"
 
-eval `docker-machine env 2>/dev/null`
 
 ## Android development
 export ANDROID_HOME=$HOME/Library/Android/sdk
@@ -225,3 +225,38 @@ function exportFile() {
   set -o allexport; source $1; set +o allexport;
 }
 
+# rbenv
+eval "$(rbenv init -)"
+
+# docker
+docker_running=$(docker-machine ls | grep default)
+if [[ "$docker_running" == *"Stopped"* ]]
+then
+  docker-machine start default
+  eval "$(docker-machine env default)"
+  env | grep "DOCKER_HOST"
+elif [[ "$docker_running" == *"Running"* ]]
+then
+  eval "$(docker-machine env default)"
+fi
+
+alias dco=docker-compose
+alias dmc=docker-machine
+
+#source ~/.autoenv/activate.sh
+
+source ~/.namely.config
+
+export KUBECONFIG=/Users/nickherro/namely/DevKube/kubeconfig-np
+
+alias gsha="git rev-parse --short HEAD"
+alias h="history"
+
+export NVM_DIR="$HOME/.nvm"
+  . "/usr/local/opt/nvm/nvm.sh"
+
+# realtime
+export NATS_HOST=172.16.13.174
+export NATS_PORT=4221
+export NATS_WS_HOST=${NATS_HOST}
+export NATS_WS_PORT=4223
