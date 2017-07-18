@@ -180,6 +180,7 @@ colorscheme hybrid
 
 
 autocmd FileType python setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
+autocmd FileType Jenkinsfile setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
 " *********************************************
 " *                 Functions                 *
@@ -299,8 +300,7 @@ map \| :NERDTreeFind<CR>
 " Ignore files in nerdtree
 let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
-      \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '^dist',
-      \ '^build', '^styleguide-build', '^styleguide-dist', '\.git',
+      \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '\.git',
       \ '\.DS_Store', '\.vscode']
 
 let g:vroom_map_keys = 0

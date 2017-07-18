@@ -247,7 +247,7 @@ alias dmc=docker-machine
 
 source ~/.namely.config
 
-export KUBECONFIG=/Users/nickherro/namely/DevKube/kubeconfig-np
+export KUBECONFIG=/Users/nickherro/.kube/config
 
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
