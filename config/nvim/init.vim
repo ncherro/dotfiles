@@ -21,7 +21,6 @@ Plug 'ludovicchabant/vim-gutentags'
 Plug 'pangloss/vim-javascript'
 Plug 'kchmck/vim-coffee-script'
 Plug 'groenewege/vim-less'
-Plug 'Handlebars'
 Plug 'yaymukund/vim-rabl'
 Plug 'slim-template/vim-slim'
 Plug 'ngmy/vim-rubocop'
@@ -38,7 +37,6 @@ Plug 'mattn/gist-vim'
 
 " Formatting
 Plug 'scrooloose/nerdcommenter'
-Plug 'Align'
 Plug 'godlygeek/tabular'
 Plug 'editorconfig/editorconfig-vim'
 
@@ -81,6 +79,7 @@ Plug 'elixir-lang/vim-elixir'
 
 " Python
 Plug 'nvie/vim-flake8'
+Plug 'vim-scripts/indentpython'
 
 " Git
 Plug 'tpope/vim-fugitive'
@@ -179,7 +178,7 @@ let g:hybrid_reduced_contrast = 1 " Remove this line if using the default palett
 colorscheme hybrid
 
 
-autocmd FileType python setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
+
 autocmd FileType Jenkinsfile setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
 " *********************************************
@@ -301,7 +300,7 @@ map \| :NERDTreeFind<CR>
 let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '\.git',
-      \ '\.DS_Store', '\.vscode']
+      \ '\.DS_Store', '\.vscode', '__pycache__']
 
 let g:vroom_map_keys = 0
 silent! map <unique> <Leader>t :VroomRunTestFile<CR>
@@ -326,9 +325,17 @@ au BufNewFile,BufRead Gemfile set ft=ruby
 au BufNewFile,BufRead *.cap set ft=ruby
 au BufNewFile,BufRead *.config set ft=zsh
 
+au BufNewFile,BufRead *.py
+    \ set tabstop=4 |
+    \ set softtabstop=4 |
+    \ set shiftwidth=4 |
+    \ set textwidth=79 |
+    \ set expandtab |
+    \ set autoindent |
+    \ set fileformat=unix
+
 " flake8
 let g:flake8_ignore="E403,E128,F403"
-autocmd BufWritePost *.py call Flake8()
 
 " syntax alias
 autocmd BufNewFile,BufRead *.conf set syntax=config

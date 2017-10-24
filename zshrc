@@ -23,7 +23,7 @@ PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
-export EDITOR='nvim'
+export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/New_York
@@ -53,17 +53,27 @@ alias pg-status='pg_ctl -D /usr/local/var/postgres status'
 alias gfa='git fetch --all'
 alias gfu='git fetch upstream'
 
+# tmux list sessions
 alias tls="tmux ls"
-alias tat="tmux at"
+
+# tmux attach
 tatt() {
   tmux at -t $1
 }
-tns() {
-  tmux new -s $1
-}
-tnss() {
+
+# tmux attach
+tat() {
+  # get the current directory name
   dirname=${PWD##*/}
-  tmux new -s $dirname
+  # try to create a new session (hide errors)
+  tmux new -s $dirname # 2>&1 /dev/null
+  # attach to the session
+  tatt $dirname
+}
+
+# tmux kill server
+tks() {
+  tmux kill-server
 }
 
 # mongodb
@@ -158,7 +168,7 @@ else
     ssh-add
 fi
 
-alias v="nvim"
+alias v="vim"
 alias z="zeus"
 alias zc="zeus c"
 alias zs="zeus start"
@@ -247,7 +257,9 @@ alias dmc=docker-machine
 
 source ~/.namely.config
 
+# k8s
 export KUBECONFIG=/Users/nickherro/.kube/config
+export TILLER_NAMESPACE=default
 
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
