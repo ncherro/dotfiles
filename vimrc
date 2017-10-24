@@ -1,10 +1,7 @@
 " *********************************************
-" *          Vundle - Vim Plugins             *
+" *          Vim Plugins             *
 " *********************************************
 call plug#begin()
-
-" Let Vundle manage Vundle
-Plug 'gmarik/vundle'
 
 " Navigation
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
@@ -17,7 +14,6 @@ Plug 'jeetsukumaran/vim-buffergator'
 Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax
-"Plug 'scrooloose/syntastic'
 Plug 'pangloss/vim-javascript'
 Plug 'kchmck/vim-coffee-script'
 Plug 'groenewege/vim-less'
@@ -29,7 +25,6 @@ Plug 'mxw/vim-jsx'
 Plug 'fatih/vim-go'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'cespare/vim-toml'
-"Plug 'facebook/vim-flow', { 'autoload' : { 'filetypes' : 'javascript' } }
 
 " Gist
 Plug 'mattn/webapi-vim'
@@ -48,16 +43,13 @@ Plug 'mattn/emmet-vim'
 Plug 'Raimondi/delimitMate'
 Plug 'ervandew/supertab'
 Plug 'vim-scripts/loremipsum'
-"Plug 'Valloric/YouCompleteMe'
 
-Plug 'vim-airline/vim-airline'
-Plug 'vim-airline/vim-airline-themes'
+" Powerline
+Plug 'itchyny/lightline.vim'
+
 Plug 'rizzatti/funcoo.vim'
 Plug 'rizzatti/dash.vim'
-Plug 'tpope/vim-rvm'
 Plug 'tpope/vim-dispatch'
-
-"Plug 'Floobits/floobits-vim'
 
 " Git
 Plug 'sjl/gundo.vim'
@@ -69,7 +61,6 @@ Plug 'tpope/vim-haml'
 
 " Cucumber
 Plug 'tpope/vim-cucumber'
-"Plug 'git://gist.github.com/287147.git'
 
 " Ruby
 Plug 'skalnik/vim-vroom'
@@ -87,10 +78,8 @@ Plug 'tpope/vim-fugitive'
 " JS tests
 Plug 'janko-m/vim-test'
 
-" Color schemes
-Plug 'altercation/vim-colors-solarized'
+" Color schemes / colors
 Plug 'w0ng/vim-hybrid'
-Plug 'morhetz/gruvbox'
 Plug 'ap/vim-css-color'
 
 " Async linting
@@ -153,12 +142,7 @@ set sidescrolloff=7
 
 set mouse-=a
 set mousehide
-if !has('nvim')
-  set ttymouse=xterm2
-endif
-if has('nvim')
-  nmap <BS> <C-W>h
-endif
+set ttymouse=xterm2
 set sidescroll=1
 
 set nobackup                      " Don't make a backup before overwriting a file.
@@ -367,8 +351,57 @@ let test#javascript#mocha#options = '--compilers js:babel-core/register --recurs
 map <leader>d :redraw! <CR>
 
 " vim-airline
-let g:airline_left_sep=''
-let g:airline_right_sep=''
+"let g:airline_left_sep=''
+"let g:airline_right_sep=''
+
+" Lightline
+let g:lightline = {
+\ 'colorscheme': 'wombat',
+\ 'active': {
+\   'left': [['mode', 'paste'], ['filename', 'modified']],
+\   'right': [['lineinfo'], ['percent'], ['readonly', 'linter_warnings', 'linter_errors', 'linter_ok']]
+\ },
+\ 'component_expand': {
+\   'linter_warnings': 'LightlineLinterWarnings',
+\   'linter_errors': 'LightlineLinterErrors',
+\   'linter_ok': 'LightlineLinterOK'
+\ },
+\ 'component_type': {
+\   'readonly': 'error',
+\   'linter_warnings': 'warning',
+\   'linter_errors': 'error'
+\ },
+\ }
+
+function! LightlineLinterWarnings() abort
+  let l:counts = ale#statusline#Count(bufnr(''))
+  let l:all_errors = l:counts.error + l:counts.style_error
+  let l:all_non_errors = l:counts.total - l:all_errors
+  return l:counts.total == 0 ? '' : printf('%d ◆', all_non_errors)
+endfunction
+
+function! LightlineLinterErrors() abort
+  let l:counts = ale#statusline#Count(bufnr(''))
+  let l:all_errors = l:counts.error + l:counts.style_error
+  let l:all_non_errors = l:counts.total - l:all_errors
+  return l:counts.total == 0 ? '' : printf('%d ✗', all_errors)
+endfunction
+
+function! LightlineLinterOK() abort
+  let l:counts = ale#statusline#Count(bufnr(''))
+  let l:all_errors = l:counts.error + l:counts.style_error
+  let l:all_non_errors = l:counts.total - l:all_errors
+  return l:counts.total == 0 ? '✓ ' : ''
+endfunction
+
+autocmd User ALELint call s:MaybeUpdateLightline()
+
+" Update and show lightline but only if it's visible (e.g., not in Goyo)
+function! s:MaybeUpdateLightline()
+  if exists('#lightline')
+    call lightline#update()
+  end
+endfunction
 
 " vim-jsx
 let g:jsx_ext_required = 0
@@ -384,6 +417,5 @@ nnoremap <C-p> :GitFiles<CR>
 " TODO: figure out how to get colon into the %z for iso
 :nnoremap <F5> "=strftime("%FT%T%z")<CR>P
 :inoremap <F5> <C-R>=strftime("%FT%T%z")<CR>
-
 
 map <Leader>cf :!docker-compose run app cucumber %<cr>
