@@ -23,7 +23,7 @@ PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 
-export EDITOR='vim'
+export EDITOR='nvim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/New_York
@@ -168,7 +168,7 @@ else
     ssh-add
 fi
 
-alias v="vim"
+alias v="nvim"
 alias z="zeus"
 alias zc="zeus c"
 alias zs="zeus start"

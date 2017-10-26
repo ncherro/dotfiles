@@ -4,7 +4,7 @@
 call plug#begin()
 
 " Navigation
-Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+Plug '/usr/local/opt/fzf'
 Plug 'junegunn/fzf.vim'
 Plug 'scrooloose/nerdtree'
 Plug 'vim-scripts/IndexedSearch'
@@ -15,11 +15,7 @@ Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax
 Plug 'pangloss/vim-javascript'
-Plug 'kchmck/vim-coffee-script'
-Plug 'groenewege/vim-less'
-Plug 'yaymukund/vim-rabl'
 Plug 'slim-template/vim-slim'
-Plug 'ngmy/vim-rubocop'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
 Plug 'fatih/vim-go'
@@ -42,9 +38,8 @@ Plug 'msanders/snipmate.vim'
 Plug 'mattn/emmet-vim'
 Plug 'Raimondi/delimitMate'
 Plug 'ervandew/supertab'
-Plug 'vim-scripts/loremipsum'
 
-" Powerline
+" Bar
 Plug 'itchyny/lightline.vim'
 
 Plug 'rizzatti/funcoo.vim'
@@ -61,9 +56,6 @@ Plug 'tpope/vim-haml'
 
 " Cucumber
 Plug 'tpope/vim-cucumber'
-
-" Ruby
-Plug 'skalnik/vim-vroom'
 
 " Elixir
 Plug 'elixir-lang/vim-elixir'
@@ -111,9 +103,9 @@ set cursorline
 set list listchars=tab:\ \ ,trail:·
 
 set nowrap                        " don't wrap lines
-set tabstop=2 shiftwidth=2        " a tab is two spaces (or set this to 4)
-set expandtab                     " use spaces, not tabs (optional)
-set backspace=indent,eol,start    " backspace through everything in insert mode"
+set tabstop=2 shiftwidth=2        " a tab is two spaces
+set expandtab                     " use spaces, not tabs
+set backspace=indent,eol,start    " backspace through everything in insert mode
 set autoindent                    " match indentation of previous line
 set pastetoggle=<F2>
 
@@ -128,7 +120,6 @@ set nofoldenable                  "dont fold by default
 
 set hidden                        " Handle multiple buffers better.
 set title                         " Set the terminal's title
-set relativenumber                " Show relative line numbers"
 set number                        " Show line numbers.
 set ruler                         " Show cursor position.
 set wildmode=list:longest         " Complete files like a shell.
@@ -142,7 +133,9 @@ set sidescrolloff=7
 
 set mouse-=a
 set mousehide
-set ttymouse=xterm2
+if !has('nvim')
+  set ttymouse=xterm2
+endif
 set sidescroll=1
 
 set nobackup                      " Don't make a backup before overwriting a file.
@@ -151,17 +144,13 @@ set directory=/tmp                " Keep swap files in one location
 set timeoutlen=500
 
 set laststatus=2                  " Show the status line all the time
-" set statusline=[%n]\ %<%.99f\ %h%w%m%r%y\ %{exists('*CapsLockStatusline')?CapsLockStatusline():''}%=%-16(\ %l,%c-%v\ %)%P
 set statusline=%f
-
 
 " color scheme
 set background=dark
 let g:hybrid_custom_term_colors = 1
-let g:hybrid_reduced_contrast = 1 " Remove this line if using the default palette.
+let g:hybrid_reduced_contrast = 1
 colorscheme hybrid
-
-
 
 autocmd FileType Jenkinsfile setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
@@ -235,12 +224,6 @@ nnoremap <Leader>8 :8b<CR>
 nnoremap <Leader>9 :9b<CR>
 nnoremap <Leader>0 :10b<CR>
 
-" ============================
-" Greeper
-" ============================
-"nmap <silent> <leader>g :G<CR>
-
-
 " Easier navigation between split windows
 nnoremap <C-j> <C-w>j
 nnoremap <C-k> <C-w>k
@@ -284,11 +267,9 @@ map \| :NERDTreeFind<CR>
 let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '\.git',
-      \ '\.DS_Store', '\.vscode', '__pycache__']
+      \ '\.DS_Store', '\.vscode', '__pycache__', '^tags', '^tags.lock$',
+      \ '^tags.temp$', '^coverage']
 
-let g:vroom_map_keys = 0
-silent! map <unique> <Leader>t :VroomRunTestFile<CR>
-silent! map <unique> <Leader>T :VroomRunNearestTest<CR>
 silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 
 " Remove trailing whitspace on save
@@ -298,9 +279,6 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 " *           Plugin Customization            *
 " *********************************************
 
-" Handlebars
-au BufRead,BufNewFile *.handlebars,*.hbs set ft=handlebars
-
 " Override filetype
 au BufRead,BufNewFile *.html set ft=htmldjango
 au BufNewFile,BufRead *.ejs set ft=html.js
@@ -309,6 +287,7 @@ au BufNewFile,BufRead Gemfile set ft=ruby
 au BufNewFile,BufRead *.cap set ft=ruby
 au BufNewFile,BufRead *.config set ft=zsh
 
+" Python
 au BufNewFile,BufRead *.py
     \ set tabstop=4 |
     \ set softtabstop=4 |
@@ -350,10 +329,6 @@ let test#javascript#mocha#options = '--compilers js:babel-core/register --recurs
 " redraw everything
 map <leader>d :redraw! <CR>
 
-" vim-airline
-"let g:airline_left_sep=''
-"let g:airline_right_sep=''
-
 " Lightline
 let g:lightline = {
 \ 'colorscheme': 'wombat',
@@ -371,7 +346,14 @@ let g:lightline = {
 \   'linter_warnings': 'warning',
 \   'linter_errors': 'error'
 \ },
+\ 'component_function': {
+\   'filename': 'LightLineFilename'
+\ },
 \ }
+
+function! LightLineFilename()
+  return expand('%')
+endfunction
 
 function! LightlineLinterWarnings() abort
   let l:counts = ale#statusline#Count(bufnr(''))
@@ -403,6 +385,9 @@ function! s:MaybeUpdateLightline()
   end
 endfunction
 
+" ale
+let g:ale_set_highlights = 0
+
 " vim-jsx
 let g:jsx_ext_required = 0
 
@@ -412,10 +397,6 @@ nnoremap <Leader>fb :Buffers<CR>
 nnoremap <Leader>fa :Ag<Space>
 nnoremap <C-p> :GitFiles<CR>
 
-
 " datetime
-" TODO: figure out how to get colon into the %z for iso
 :nnoremap <F5> "=strftime("%FT%T%z")<CR>P
 :inoremap <F5> <C-R>=strftime("%FT%T%z")<CR>
-
-map <Leader>cf :!docker-compose run app cucumber %<cr>
