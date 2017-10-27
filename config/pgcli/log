@@ -1,4 +1,0 @@
-2017-05-15 13:09:46,297 (34547/MainThread) pgcli.main INFO - Default pager found in PAGER environment variable: 'less'
-2017-05-15 13:09:46,419 (34547/MainThread) pgcli.main ERROR - traceback: 'Traceback (most recent call last):\n  File "/usr/local/Cellar/pgcli/1.5.1/libexec/lib/python2.7/site-packages/pgcli/main.py", line 330, in connect\n    raise e\nOperationalError: FATAL:  database "nickherro" does not exist\n\n'
-2017-05-15 13:11:31,643 (34655/MainThread) pgcli.main INFO - Default pager found in PAGER environment variable: 'less'
-2017-05-15 13:11:47,974 (34655/MainThread) pgcli.main ERROR - traceback: 'Traceback (most recent call last):\n  File "/usr/local/Cellar/pgcli/1.5.1/libexec/lib/python2.7/site-packages/pgcli/main.py", line 330, in connect\n    raise e\nOperationalError: could not send data to server: Socket is not connected\ncould not send SSL negotiation packet: Socket is not connected\n\n'
