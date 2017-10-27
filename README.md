@@ -21,8 +21,7 @@ sure why
 
 1. `brew install neovim`
 1. install [plug](https://github.com/junegunn/vim-plug#neovim)
-1. `mkdir -p ~/.config/nvim`
-1. `ln -s /path/to/this/dir/vimrc ~/.config/nvim/init.vim`
+1. `mkdir -p ~/.config/nvim; cd ~/.config/nvim` then symlink this repo's vimrc file to init.vim
 1. launch `nvim` (aliased to `v` in .zshrc) and run `:PluginInstall`
 
 ## Hybrid color scheme
