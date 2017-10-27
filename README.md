@@ -38,3 +38,8 @@ Install the iTerm2 reduced contrast color theme
 
 1. `brew install tmux`
 1. `ln -s /path/to/this/dir/tmux.conf ~/.tmux.conf`
+
+## Git config
+
+1. `cp /path/to/this/dir/gitconfig ~/.gitconfig` and edit the file to override
+   your username, etc

@@ -10,10 +10,10 @@
   dump = cat-file -p
 [user]
   name = Nick Herro
-	email = ncherro@gmail.com
+  email = ncherro@gmail.com
 [credential]
-	helper = osxkeychain
+  helper = osxkeychain
 [github]
   user = ncherro
 [core]
-	excludesfile = /Users/nickherro/.gitignore
+  excludesfile = /Users/nickherro/.gitignore
