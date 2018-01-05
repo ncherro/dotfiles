@@ -152,8 +152,6 @@ let g:hybrid_custom_term_colors = 1
 let g:hybrid_reduced_contrast = 1
 colorscheme hybrid
 
-autocmd FileType Jenkinsfile setlocal tabstop=8 expandtab shiftwidth=4 softtabstop=4
-
 " *********************************************
 " *                 Functions                 *
 " *********************************************
@@ -280,22 +278,33 @@ autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> 
 " *********************************************
 
 " Override filetype
-au BufRead,BufNewFile *.html set ft=htmldjango
-au BufNewFile,BufRead *.ejs set ft=html.js
-au BufNewFile,BufRead *.slim set ft=slim
-au BufNewFile,BufRead Gemfile set ft=ruby
-au BufNewFile,BufRead *.cap set ft=ruby
-au BufNewFile,BufRead *.config set ft=zsh
+au BufRead,BufNewFile *.html      setf htmldjango
+au BufNewFile,BufRead *.ejs       setf html.js
+au BufNewFile,BufRead *.slim      setf slim
+au BufNewFile,BufRead Gemfile     setf ruby
+au BufNewFile,BufRead *.rake      setf ruby
+au BufNewFile,BufRead *.cap       setf ruby
+au BufNewFile,BufRead *.config    setf zsh
+au BufNewFile,BufRead *.json      setf javascript
+au BufNewFile,BufRead *.proto     setf proto
+au BufNewFile,BufRead *.gradle    setf groovy
+au BufNewFile,BufRead Jenkinsfile setf groovy
+au BufNewFile,BufRead *.py        setf python
+
+" Groovy
+au FileType groovy 
+    \ set tabstop=4 |
+    \ set shiftwidth=4 |
+    \ set softtabstop=4
 
 " Python
-au BufNewFile,BufRead *.py
+au Filetype python
     \ set tabstop=4 |
-    \ set softtabstop=4 |
     \ set shiftwidth=4 |
+    \ set softtabstop=4 |
     \ set textwidth=79 |
-    \ set expandtab |
-    \ set autoindent |
-    \ set fileformat=unix
+
+" Groovy
 
 " flake8
 let g:flake8_ignore="E403,E128,F403"

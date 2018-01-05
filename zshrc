@@ -1,3 +1,6 @@
+# profile zsh
+# zmodload zsh/zprof
+
 # using_gcc for 64btt compiling on lion (solves compatability issues)
 function using_gcc() {
   env CC="/usr/bin/gcc-4.2" ARCHFLAGS="-arch x86_64" ARCHS="x86_64" $*
@@ -36,6 +39,7 @@ alias g-='gco -'
 gpp() {
   eval "git push --set-upstream origin $(git name-rev --name-only HEAD)"
 }
+alias gpf='git pf'
 
 # website stuff
 alias profiles='open ~/profiles.tmproj'
@@ -253,8 +257,6 @@ fi
 alias dco=docker-compose
 alias dmc=docker-machine
 
-#source ~/.autoenv/activate.sh
-
 source ~/.namely.config
 
 # k8s
@@ -264,11 +266,8 @@ export TILLER_NAMESPACE=default
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
 
-export NVM_DIR="$HOME/.nvm"
-  . "/usr/local/opt/nvm/nvm.sh"
+#export NVM_DIR="$HOME/.nvm"
+#. "/usr/local/opt/nvm/nvm.sh"
 
-# realtime
-export NATS_HOST=172.16.13.174
-export NATS_PORT=4221
-export NATS_WS_HOST=${NATS_HOST}
-export NATS_WS_PORT=4223
+# profile zsh
+# zprof
