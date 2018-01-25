@@ -1,25 +1,28 @@
 # profile zsh
 # zmodload zsh/zprof
 
-# using_gcc for 64btt compiling on lion (solves compatability issues)
-function using_gcc() {
-  env CC="/usr/bin/gcc-4.2" ARCHFLAGS="-arch x86_64" ARCHS="x86_64" $*
-}
+# Antigen config
+source /usr/local/share/antigen/antigen.zsh
 
-# Path to your oh-my-zsh configuration.
-export ZSH=$HOME/.oh-my-zsh
+# use the prezto framework
+antigen use prezto
 
-# Set to the name theme to load.
-# Look in ~/.oh-my-zsh/themes/
-export ZSH_THEME="geoffgarside"
+# load prezto modules
+antigen bundle helper
+antigen bundle editor
+antigen bundle git
+antigen bundle tmux
+antigen bundle prompt
 
-# plugins can be found in ~/.oh-my-zsh/plugins/*
-plugins=(rails git github ruby)
+# other bundles
+antigen bundle zsh-users/zsh-syntax-highlighting
 
-source $ZSH/oh-my-zsh.sh
+# apply ^
+antigen apply
 
-# custom prompt
-PROMPT='[%*] %{$fg[magenta]%}%n%{$reset_color%}:%{$fg[green]%}%c%{$reset_color%}$(git_prompt_info) %(!.#.$) '
+# https://github.com/sindresorhus/pure
+prompt pure
+
 
 # /usr/local/ first, for homebrew
 PATH=/usr/local/bin:/usr/local/sbin:$PATH
@@ -36,16 +39,11 @@ export SHELL=/usr/local/bin/zsh
 # git
 export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
-gpp() {
-  eval "git push --set-upstream origin $(git name-rev --name-only HEAD)"
-}
 alias gpf='git pf'
 
-# website stuff
-alias profiles='open ~/profiles.tmproj'
-alias ts='date +"%F_%T"' # prints a timestamp - e.g. echo "asdf`ts`"
-alias projects='cd ~/Projects'
-alias iphone='cd ~/Projects/iPhone'
+deletemerged() {
+  git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
+}
 
 # Postgres
 export PGDATA=/usr/local/var/postgres
@@ -53,19 +51,13 @@ alias pg-start='pg_ctl -D /usr/local/var/postgres -l /usr/local/var/postgres/ser
 alias pg-stop='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
 alias pg-status='pg_ctl -D /usr/local/var/postgres status'
 
-# Git
-alias gfa='git fetch --all'
-alias gfu='git fetch upstream'
-
-# tmux list sessions
+# tmux
 alias tls="tmux ls"
 
-# tmux attach
 tatt() {
   tmux at -t $1
 }
 
-# tmux attach
 tat() {
   # get the current directory name
   dirname=${PWD##*/}
@@ -75,13 +67,9 @@ tat() {
   tatt $dirname
 }
 
-# tmux kill server
 tks() {
   tmux kill-server
 }
-
-# mongodb
-alias mongodb.start="mongod --fork --logpath /var/log/mongodb.log --logappend"
 
 # cd to the git root, then cd one level up then back in to help RVM
 cd.() {
@@ -98,43 +86,6 @@ nginx-restart() {
   nginx-start;
 }
 
-# memcached
-alias memcached-start="/usr/local/opt/memcached/bin/memcached -d"
-
-alias redis-start="redis-server /usr/local/etc/redis.conf"
-alias flushredis="echo 'FLUSHALL' | redis-cli"
-
-# PHP-FPM
-alias php54-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php54.plist"
-#alias php53-start="sudo launchctl load -w /Library/LaunchAgents/homebrew-php.josegonzalez.php53.plist"
-php-stop() {
-  if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
-    echo "Stopping PHP-FPM..."
-    pid=$(cat /usr/local/var/run/php-fpm.pid)
-    kill -TERM $pid
-  else
-    echo "PHP-FPM does not appear to be running"
-  fi
-}
-php-graceful-stop() {
-  if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
-    echo "Gracefully stopping PHP-FPM..."
-    pid=$(cat /usr/local/var/run/php-fpm.pid)
-    kill -QUIT $pid
-  else
-    echo "PHP-FPM does not appear to be running"
-  fi
-}
-php-reload() {
-  if [ -f "/usr/local/var/run/php-fpm.pid" ]; then
-    echo "Reloading PHP-FPM..."
-    pid=$(cat /usr/local/var/run/php-fpm.pid)
-    kill -USR2 $pid
-  else
-    echo "PHP-FPM does not appear to be running"
-  fi
-}
-
 # other aliases
 alias l="ls -alh"
 
@@ -143,22 +94,7 @@ alias stamp="date +%F-%H%M%S"
 # disable autocorrect
 alias cap="nocorrect cap"
 
-killport() {
-  if [ -n "${1}" ]; then
-    port=$1
-  else
-    # default (Rails-centric)
-    port="3000"
-  fi
-  pid=`lsof -wni tcp:$port | grep 'ruby' | awk 'NR==1 { print $2 }'`
-  if [ -n "${pid}" ]; then
-    kill -9 $pid
-    echo "Killed process $pid"
-  else
-    echo "No processes were found listening on tcp:$port"
-  fi
-}
-
+# ssh agent
 if [ -f ~/.agent.env ] ; then
     . ~/.agent.env > /dev/null
 if ! kill -0 $SSH_AGENT_PID > /dev/null 2>&1; then
@@ -173,24 +109,8 @@ else
 fi
 
 alias v="nvim"
-alias z="zeus"
-alias zc="zeus c"
-alias zs="zeus start"
-alias zr="zeus s"
-alias zmig="zeus rake db:migrate"
-alias zt="unset AWS_SECRET_ACCESS_KEY && unset AWS_ACCESS_KEY_ID && zeus rspec spec"
-
-alias venv='. ./venv/bin/activate'
 
 ulimit -n 10000
-
-#export PYTHONPATH=$(brew --prefix)/lib/python2.7/site-packages:$PYTHONPATH
-
-alias npmgrunt="npm install && grunt server"
-
-deletemerged() {
-  git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
-}
 
 source /usr/local/share/zsh/site-functions/_aws
 
@@ -257,6 +177,11 @@ fi
 alias dco=docker-compose
 alias dmc=docker-machine
 
+alias docker-clean="drmc;drmv;drmi"
+alias drmc="docker rm \$(docker ps -qa --no-trunc --filter 'status=exited')"
+alias drmv="docker volume rm \$(docker volume ls -qf dangling=true)"
+alias drmi="docker rmi \$(docker images | grep '^<none>' | awk '{print $3}')"
+
 source ~/.namely.config
 
 # k8s
@@ -265,9 +190,6 @@ export TILLER_NAMESPACE=default
 
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
-
-#export NVM_DIR="$HOME/.nvm"
-#. "/usr/local/opt/nvm/nvm.sh"
 
 # profile zsh
 # zprof

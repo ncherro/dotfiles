@@ -290,6 +290,7 @@ au BufNewFile,BufRead *.proto     setf proto
 au BufNewFile,BufRead *.gradle    setf groovy
 au BufNewFile,BufRead Jenkinsfile setf groovy
 au BufNewFile,BufRead *.py        setf python
+au BufNewFile,BufRead *.rb        setf ruby
 
 " Groovy
 au FileType groovy 
