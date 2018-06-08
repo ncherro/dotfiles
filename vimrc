@@ -18,9 +18,10 @@ Plug 'pangloss/vim-javascript'
 Plug 'slim-template/vim-slim'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
-Plug 'fatih/vim-go'
+Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 Plug 'editorconfig/editorconfig-vim'
 Plug 'cespare/vim-toml'
+Plug 'uarun/vim-protobuf'
 
 " Gist
 Plug 'mattn/webapi-vim'
@@ -266,7 +267,7 @@ let NERDTreeShowHidden=1
 let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '\.git',
       \ '\.DS_Store', '\.vscode', '__pycache__', '^tags', '^tags.lock$',
-      \ '^tags.temp$', '^coverage']
+      \ '^tags.temp$', '^coverage', '^build\/', '__init__.py']
 
 silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 
@@ -291,6 +292,7 @@ au BufNewFile,BufRead *.gradle    setf groovy
 au BufNewFile,BufRead Jenkinsfile setf groovy
 au BufNewFile,BufRead *.py        setf python
 au BufNewFile,BufRead *.rb        setf ruby
+au BufNewFile,BufRead Dockerfile* setf Dockerfile
 
 " Groovy
 au FileType groovy 
@@ -312,6 +314,9 @@ let g:flake8_ignore="E403,E128,F403"
 
 " syntax alias
 autocmd BufNewFile,BufRead *.conf set syntax=config
+
+" go
+let g:go_auto_sameids = 1
 
 " *********************************************
 " *        Local Vimrc Customization          *

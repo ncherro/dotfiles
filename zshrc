@@ -1,6 +1,8 @@
 # profile zsh
 # zmodload zsh/zprof
 
+export HISTFILE=~/.zhistory
+
 # Antigen config
 source /usr/local/share/antigen/antigen.zsh
 
@@ -8,6 +10,7 @@ source /usr/local/share/antigen/antigen.zsh
 antigen use prezto
 
 # load prezto modules
+antigen bundle history
 antigen bundle helper
 antigen bundle editor
 antigen bundle git
@@ -40,6 +43,7 @@ export SHELL=/usr/local/bin/zsh
 export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
 alias gpf='git pf'
+alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
 
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
@@ -176,6 +180,7 @@ fi
 
 alias dco=docker-compose
 alias dmc=docker-machine
+alias edmc='eval $(docker-machine env default)'
 
 alias docker-clean="drmc;drmv;drmi"
 alias drmc="docker rm \$(docker ps -qa --no-trunc --filter 'status=exited')"
@@ -190,6 +195,8 @@ export TILLER_NAMESPACE=default
 
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
+
+export PLATFORM=~/Projects/namely/platform
 
 # profile zsh
 # zprof
