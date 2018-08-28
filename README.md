@@ -9,9 +9,8 @@
 Better than bash
 
 1. `brew install zsh`
-1. install [oh-my-zsh](https://github.com/robbyrussell/oh-my-zsh)
+1. `brew install antigen`
 1. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
-1. `ln -s /path/to/this/dir/env ~/.env`
 1. `source ~/.zshrc` (or open a new shell)
 
 ## Neovim
@@ -27,8 +26,8 @@ sure why
 ## Hybrid color scheme
 
 After years of using solarized dark I switched to the reduced contrast
-[hybrid](https://github.com/w0ng/vim-hybrid) color scheme, and I am much
-happier now
+[hybrid](https://github.com/w0ng/vim-hybrid) color scheme, and my life is much
+better
 
 Install the iTerm2 reduced contrast color theme
 [like this](https://github.com/w0ng/vim-hybrid#osx-users-iterm)

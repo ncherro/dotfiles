@@ -44,6 +44,7 @@ export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
 alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
+alias gd='gwd'
 
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
@@ -140,10 +141,12 @@ export GOROOT=/usr/local/opt/go/libexec
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$GOROOT/bin
 
-export FZF_DEFAULT_COMMAND='
-  (git ls-tree -r --name-only HEAD ||
-       find . -path "*/\.*" -prune -o -type f -print -o -type l -print |
-        sed s/^..//) 2> /dev/null'
+#export FZF_DEFAULT_COMMAND='
+  #(git ls-tree -r --name-only HEAD ||
+       #find . -path "*/\.*" -prune -o -type f -print -o -type l -print |
+        #sed s/^..//) 2> /dev/null'
+
+export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow --glob "!.git/*"'
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 

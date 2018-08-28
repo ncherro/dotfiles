@@ -33,6 +33,7 @@ Plug 'godlygeek/tabular'
 Plug 'editorconfig/editorconfig-vim'
 
 " Autocomplete
+Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-endwise'
 Plug 'msanders/snipmate.vim'
@@ -54,6 +55,13 @@ Plug 'sjl/gundo.vim'
 Plug 'tpope/vim-rails'
 Plug 'tpope/vim-rake'
 Plug 'tpope/vim-haml'
+
+" Ruby
+Plug 'fishbullet/deoplete-ruby'
+
+" Go
+Plug 'zchee/deoplete-go', { 'do': 'make'}      " Go auto completion
+Plug 'zchee/deoplete-jedi'                     " Go auto completion
 
 " Cucumber
 Plug 'tpope/vim-cucumber'
@@ -210,7 +218,7 @@ nmap <silent> // :nohlsearch<CR>
 " Flip buffers
 nnoremap <Leader>l :ls<CR>
 nnoremap <Leader>b :bp<CR>
-nnoremap <Leader>f :bn<CR>
+" nnoremap <Leader>f :bn<CR>
 nnoremap <Leader>g :e#<CR>
 nnoremap <Leader>1 :1b<CR>
 nnoremap <Leader>2 :2b<CR>
@@ -252,11 +260,6 @@ map <leader>e :!%:p<cr>
 
 " rename current file
 map <leader>n :call RenameFile()<cr>
-
-" AckGrep current word
-map <leader>a :call AckGrep()<CR>
-" AckVisual current selection
-vmap <leader>a :call AckVisual()<CR>
 
 " File tree browser - backslash
 map \ :NERDTreeToggle<CR>
@@ -307,6 +310,34 @@ au Filetype python
     \ set softtabstop=4 |
     \ set textwidth=79 |
 
+" Go
+if has('nvim')
+    " Enable deoplete on startup
+    let g:deoplete#enable_at_startup = 1
+endif
+
+" Disable deoplete when in multi cursor mode
+function! Multiple_cursors_before()
+    let b:deoplete_disable_auto_complete = 1
+endfunction
+
+function! Multiple_cursors_after()
+    let b:deoplete_disable_auto_complete = 0
+endfunction
+
+"" Enable completing of go pointers
+"let g:deoplete#sources#go#pointer = 1
+
+" Highlighting
+let g:go_highlight_build_constraints = 1
+let g:go_highlight_extra_types = 1
+let g:go_highlight_fields = 1
+let g:go_highlight_functions = 1
+let g:go_highlight_methods = 1
+let g:go_highlight_operators = 1
+let g:go_highlight_structs = 1
+let g:go_highlight_types = 1
+
 " Groovy
 
 " flake8
@@ -316,7 +347,7 @@ let g:flake8_ignore="E403,E128,F403"
 autocmd BufNewFile,BufRead *.conf set syntax=config
 
 " go
-let g:go_auto_sameids = 1
+" let g:go_auto_sameids = 1
 
 " *********************************************
 " *        Local Vimrc Customization          *
@@ -409,8 +440,22 @@ let g:jsx_ext_required = 0
 " fzf
 nnoremap <Leader>ff :GitFiles<CR>
 nnoremap <Leader>fb :Buffers<CR>
-nnoremap <Leader>fa :Ag<Space>
+nnoremap <Leader>fa :Find<Space>
 nnoremap <C-p> :GitFiles<CR>
+
+" ripgrep
+let g:rg_highlight = 1
+
+" --column: Show column number
+" --line-number: Show line number
+" --no-heading: Do not show file headings in results
+" --fixed-strings: Search term as a literal string
+" --ignore-case: Case insensitive search
+" --hidden: Search hidden files and folders
+" --follow: Follow symlinks
+" --glob: Additional conditions for search (in this case ignore everything in the .git/ folder)
+" --color: Search color options
+command! -bang -nargs=* Find call fzf#vim#grep('rg --column --line-number --no-heading --fixed-strings --ignore-case --hidden --follow --glob "!.git/*" --color "always" '.shellescape(<q-args>), 1, <bang>0)
 
 " datetime
 :nnoremap <F5> "=strftime("%FT%T%z")<CR>P
