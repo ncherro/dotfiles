@@ -44,6 +44,9 @@ Plug 'ervandew/supertab'
 " Bar
 Plug 'itchyny/lightline.vim'
 
+" Markdown
+Plug 'suan/vim-instant-markdown'
+
 Plug 'rizzatti/funcoo.vim'
 Plug 'rizzatti/dash.vim'
 Plug 'tpope/vim-dispatch'

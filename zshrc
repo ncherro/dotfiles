@@ -182,6 +182,7 @@ then
 fi
 
 alias dco=docker-compose
+alias dc=docker-compose
 alias dmc=docker-machine
 alias edmc='eval $(docker-machine env default)'
 
