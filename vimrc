@@ -33,7 +33,6 @@ Plug 'godlygeek/tabular'
 Plug 'editorconfig/editorconfig-vim'
 
 " Autocomplete
-Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-endwise'
 Plug 'msanders/snipmate.vim'
@@ -59,13 +58,6 @@ Plug 'tpope/vim-rails'
 Plug 'tpope/vim-rake'
 Plug 'tpope/vim-haml'
 
-" Ruby
-Plug 'fishbullet/deoplete-ruby'
-
-" Go
-Plug 'zchee/deoplete-go', { 'do': 'make'}      " Go auto completion
-Plug 'zchee/deoplete-jedi'                     " Go auto completion
-
 " Cucumber
 Plug 'tpope/vim-cucumber'
 
@@ -83,7 +75,7 @@ Plug 'tpope/vim-fugitive'
 Plug 'janko-m/vim-test'
 
 " Color schemes / colors
-Plug 'w0ng/vim-hybrid'
+Plug 'chriskempson/base16-vim'
 Plug 'ap/vim-css-color'
 
 " Async linting
@@ -158,11 +150,11 @@ set timeoutlen=500
 set laststatus=2                  " Show the status line all the time
 set statusline=%f
 
-" color scheme
-set background=dark
-let g:hybrid_custom_term_colors = 1
-let g:hybrid_reduced_contrast = 1
-colorscheme hybrid
+if filereadable(expand("~/.vimrc_background"))
+  let base16colorspace=256
+  source ~/.vimrc_background
+endif
+colorscheme base16-default-dark
 
 " *********************************************
 " *                 Functions                 *
@@ -254,6 +246,9 @@ vmap <s-tab> <gv
 " F7 reformats the whole file and leaves you where you were (unlike gg)
 map <silent> <F7> mzgg=G'z :delmarks z<CR>:echo "Reformatted."<CR>
 
+" instant markdown
+let g:instant_markdown_autostart = 0
+
 " open files in directory of current file
 cnoremap %% <C-R>=expand('%:h').'/'<cr>
 map <leader>v :view %%
@@ -312,24 +307,6 @@ au Filetype python
     \ set shiftwidth=4 |
     \ set softtabstop=4 |
     \ set textwidth=79 |
-
-" Go
-if has('nvim')
-    " Enable deoplete on startup
-    let g:deoplete#enable_at_startup = 1
-endif
-
-" Disable deoplete when in multi cursor mode
-function! Multiple_cursors_before()
-    let b:deoplete_disable_auto_complete = 1
-endfunction
-
-function! Multiple_cursors_after()
-    let b:deoplete_disable_auto_complete = 0
-endfunction
-
-"" Enable completing of go pointers
-"let g:deoplete#sources#go#pointer = 1
 
 " Highlighting
 let g:go_highlight_build_constraints = 1

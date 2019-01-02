@@ -3,6 +3,8 @@
 1. install [iTerm2](https://www.iterm2.com/)
 1. install [inconsolata](http://levien.com/type/myfonts/inconsolata.html)
 1. `brew install fzf` [for fuzzy finding functionality](https://github.com/junegunn/fzf)
+1. `brew install ctags` to support gutentags
+1. `brew install ripgrep` to support Vim `:Find`
 
 ## Zsh
 

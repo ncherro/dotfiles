@@ -13,9 +13,10 @@
   name = Nick Herro
   email = ncherro@gmail.com
 [credential]
-	helper = osxkeychain
+  helper = osxkeychain
 [github]
   user = ncherro
 [core]
   excludesfile = /Users/nickherro/.gitignore
+	autocrlf = false
   # hooksPath = /Users/nickherro/Projects/namely/foo/.git/hooks

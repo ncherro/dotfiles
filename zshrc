@@ -26,11 +26,17 @@ antigen apply
 # https://github.com/sindresorhus/pure
 prompt pure
 
+# Base16 Shell
+BASE16_SHELL="$HOME/.config/base16-shell/"
+[ -n "$PS1" ] && \
+    [ -s "$BASE16_SHELL/profile_helper.sh" ] && \
+        eval "$("$BASE16_SHELL/profile_helper.sh")"
 
 # /usr/local/ first, for homebrew
 PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
+export PATH=$PATH:~/Library/Python/2.7/bin
 
 export EDITOR='nvim'
 export LC_ALL=en_US.UTF-8
@@ -134,12 +140,14 @@ fi
 export PATH="/usr/local/heroku/bin:$PATH"
 
 ## Go
-# temporary 1.7 override
-# https://github.com/golang/go/issues/18172
-export GOPATH=$HOME/golang
+export GOPATH=$HOME/go
 export GOROOT=/usr/local/opt/go/libexec
+export GOBIN=$GOPATH/bin
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$GOROOT/bin
+export GIT_TERMINAL_PROMPT=1 # allow go get for github repos
+export GO111MODULE=on
+
 
 #export FZF_DEFAULT_COMMAND='
   #(git ls-tree -r --name-only HEAD ||
@@ -204,3 +212,6 @@ export PLATFORM=~/Projects/namely/platform
 
 # profile zsh
 # zprof
+
+alias nm="cd ~/Projects/namely"
+alias me="cd ~/Projects/ncherro"
