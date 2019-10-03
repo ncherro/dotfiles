@@ -18,5 +18,6 @@
   user = ncherro
 [core]
   excludesfile = /Users/nickherro/.gitignore
-	autocrlf = false
-  # hooksPath = /Users/nickherro/Projects/namely/foo/.git/hooks
+	autocrlf = input
+[url "git@github.com:"]
+	insteadOf = https://github.com/

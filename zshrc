@@ -37,6 +37,7 @@ PATH=/usr/local/bin:/usr/local/sbin:$PATH
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 export PATH=$PATH:~/Library/Python/2.7/bin
+export PATH=$PATH:~/Projects/namely/grpc/bins/opt
 
 export EDITOR='nvim'
 export LC_ALL=en_US.UTF-8
@@ -178,26 +179,21 @@ function exportFile() {
 eval "$(rbenv init -)"
 
 # docker
-docker_running=$(docker-machine ls | grep default)
-if [[ "$docker_running" == *"Stopped"* ]]
-then
-  docker-machine start default
-  eval "$(docker-machine env default)"
-  env | grep "DOCKER_HOST"
-elif [[ "$docker_running" == *"Running"* ]]
-then
-  eval "$(docker-machine env default)"
-fi
+#docker_running=$(docker-machine ls | grep default)
+#if [[ "$docker_running" == *"Stopped"* ]]
+#then
+  #docker-machine start default
+  #eval "$(docker-machine env default)"
+  #env | grep "DOCKER_HOST"
+#elif [[ "$docker_running" == *"Running"* ]]
+#then
+  #eval "$(docker-machine env default)"
+#fi
 
 alias dco=docker-compose
 alias dc=docker-compose
-alias dmc=docker-machine
-alias edmc='eval $(docker-machine env default)'
-
-alias docker-clean="drmc;drmv;drmi"
-alias drmc="docker rm \$(docker ps -qa --no-trunc --filter 'status=exited')"
-alias drmv="docker volume rm \$(docker volume ls -qf dangling=true)"
-alias drmi="docker rmi \$(docker images | grep '^<none>' | awk '{print $3}')"
+#alias dmc=docker-machine
+#alias edmc='eval $(docker-machine env default)'
 
 source ~/.namely.config
 
@@ -215,3 +211,8 @@ export PLATFORM=~/Projects/namely/platform
 
 alias nm="cd ~/Projects/namely"
 alias me="cd ~/Projects/ncherro"
+
+alias ngrok="~/ngrok"
+
+export NVM_DIR=~/.nvm
+source $(brew --prefix nvm)/nvm.sh

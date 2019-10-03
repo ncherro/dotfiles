@@ -23,6 +23,12 @@ Plug 'editorconfig/editorconfig-vim'
 Plug 'cespare/vim-toml'
 Plug 'uarun/vim-protobuf'
 
+" Typescript
+Plug 'HerringtonDarkholme/yats.vim'
+Plug 'mhartington/nvim-typescript', { 'build': './install.sh' }
+Plug 'Shougo/deoplete.nvim'
+Plug 'Shougo/denite.nvim'
+
 " Gist
 Plug 'mattn/webapi-vim'
 Plug 'mattn/gist-vim'
@@ -156,6 +162,9 @@ if filereadable(expand("~/.vimrc_background"))
 endif
 colorscheme base16-default-dark
 
+" hide the tilde's at the end of the buffer
+highlight EndOfBuffer ctermfg=black ctermbg=black
+
 " *********************************************
 " *                 Functions                 *
 " *********************************************
@@ -249,6 +258,13 @@ map <silent> <F7> mzgg=G'z :delmarks z<CR>:echo "Reformatted."<CR>
 " instant markdown
 let g:instant_markdown_autostart = 0
 
+" typescript deoplete
+let g:deoplete#enable_at_startup = 1
+
+" for deoplete
+let g:python_host_prog = "/usr/bin/python"
+let g:python3_host_prog = "/usr/local/bin/python3"
+
 " open files in directory of current file
 cnoremap %% <C-R>=expand('%:h').'/'<cr>
 map <leader>v :view %%
@@ -293,6 +309,7 @@ au BufNewFile,BufRead *.gradle    setf groovy
 au BufNewFile,BufRead Jenkinsfile setf groovy
 au BufNewFile,BufRead *.py        setf python
 au BufNewFile,BufRead *.rb        setf ruby
+au BufNewFile,BufRead *.template  setf conf
 au BufNewFile,BufRead Dockerfile* setf Dockerfile
 
 " Groovy
