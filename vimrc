@@ -18,7 +18,7 @@ Plug 'pangloss/vim-javascript'
 Plug 'slim-template/vim-slim'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
-Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
+" Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 Plug 'editorconfig/editorconfig-vim'
 Plug 'cespare/vim-toml'
 Plug 'uarun/vim-protobuf'
@@ -262,7 +262,7 @@ let g:instant_markdown_autostart = 0
 let g:deoplete#enable_at_startup = 1
 
 " for deoplete
-let g:python_host_prog = "/usr/bin/python"
+let g:python_host_prog = "/usr/local/bin/python2"
 let g:python3_host_prog = "/usr/local/bin/python3"
 
 " open files in directory of current file

@@ -124,21 +124,10 @@ alias v="nvim"
 
 ulimit -n 10000
 
-source /usr/local/share/zsh/site-functions/_aws
-
 export CLICOLOR=1
 
 # nodejs modules
 export NODE_PATH=/usr/local/lib/node_modules
-
-# set our env vars
-if [ -f ~/.env ]; then
-  source ~/.env
-else
-  print "~/.env file not found"
-fi
-### Added by the Heroku Toolbelt
-export PATH="/usr/local/heroku/bin:$PATH"
 
 ## Go
 export GOPATH=$HOME/go
@@ -165,37 +154,14 @@ export PATH="$HOME/.exenv/bin:$PATH"
 
 alias gti="git"
 
-
-## Android development
-export ANDROID_HOME=$HOME/Library/Android/sdk
-PATH="$HOME/Library/Android/sdk/tools:$HOME/Library/Android/sdk/platform-tools:${PATH}"
-export PATH
-
 function exportFile() {
   set -o allexport; source $1; set +o allexport;
 }
-
-# rbenv
-eval "$(rbenv init -)"
-
-# docker
-#docker_running=$(docker-machine ls | grep default)
-#if [[ "$docker_running" == *"Stopped"* ]]
-#then
-  #docker-machine start default
-  #eval "$(docker-machine env default)"
-  #env | grep "DOCKER_HOST"
-#elif [[ "$docker_running" == *"Running"* ]]
-#then
-  #eval "$(docker-machine env default)"
-#fi
 
 alias dco=docker-compose
 alias dc=docker-compose
 #alias dmc=docker-machine
 #alias edmc='eval $(docker-machine env default)'
-
-source ~/.namely.config
 
 # k8s
 export KUBECONFIG=/Users/nickherro/.kube/config
@@ -204,15 +170,13 @@ export TILLER_NAMESPACE=default
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
 
-export PLATFORM=~/Projects/namely/platform
-
 # profile zsh
 # zprof
 
-alias nm="cd ~/Projects/namely"
-alias me="cd ~/Projects/ncherro"
+alias an="cd ~/Projects/anchor"
 
 alias ngrok="~/ngrok"
 
-export NVM_DIR=~/.nvm
-source $(brew --prefix nvm)/nvm.sh
+export NVM_DIR="$HOME/.nvm"
+[ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/usr/local/opt/nvm/etc/bash_completion" ] && . "/usr/local/opt/nvm/etc/bash_completion"  # This loads nvm bash_completion
