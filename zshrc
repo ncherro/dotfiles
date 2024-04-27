@@ -4,7 +4,7 @@
 export HISTFILE=~/.zhistory
 
 # Antigen config
-source /usr/local/share/antigen/antigen.zsh
+source /opt/homebrew/share/antigen/antigen.zsh
 
 # use the prezto framework
 antigen use prezto
