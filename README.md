@@ -1,7 +1,5 @@
 ## Prereqs
 
-1. install [iTerm2](https://www.iterm2.com/)
-1. install [inconsolata](http://levien.com/type/myfonts/inconsolata.html)
 1. `brew install fzf` [for fuzzy finding functionality](https://github.com/junegunn/fzf)
 1. `brew install ctags` to support gutentags
 1. `brew install ripgrep` to support Vim `:Find`
@@ -15,24 +13,16 @@ Better than bash
 1. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
 1. `source ~/.zshrc` (or open a new shell)
 
-## Neovim
+## Vim
 
-My vimrc file will also work with vim8, but neovim is noticeably faster - not
-sure why
+1. `ln -s /path/to/this/dir/vimrc ~/.vimrc`
+1. launch `vim` (aliased to `v` in .zshrc) and run `:PluginInstall`
 
-1. `brew install neovim`
-1. install [plug](https://github.com/junegunn/vim-plug#neovim)
-1. `mkdir -p ~/.config/nvim; cd ~/.config/nvim` then symlink this repo's vimrc file to init.vim
-1. launch `nvim` (aliased to `v` in .zshrc) and run `:PluginInstall`
+## Color schemes
 
-## Hybrid color scheme
+Hybrid - https://github.com/chadmayfield/hybrid-terminal-theme
 
-After years of using solarized dark I switched to the reduced contrast
-[hybrid](https://github.com/w0ng/vim-hybrid) color scheme, and my life is much
-better
-
-Install the iTerm2 reduced contrast color theme
-[like this](https://github.com/w0ng/vim-hybrid#osx-users-iterm)
+Rose Pine - https://github.com/rose-pine/terminal.app
 
 ## Tmux
 

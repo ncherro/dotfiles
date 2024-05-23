@@ -6,7 +6,7 @@ call plug#begin()
 " Navigation
 Plug '/usr/local/opt/fzf'
 Plug 'junegunn/fzf.vim'
-Plug 'scrooloose/nerdtree'
+Plug 'preservim/nerdtree'
 Plug 'vim-scripts/IndexedSearch'
 Plug 'vim-scripts/matchit.zip'
 Plug 'tpope/vim-unimpaired'
@@ -25,9 +25,6 @@ Plug 'uarun/vim-protobuf'
 
 " Typescript
 Plug 'HerringtonDarkholme/yats.vim'
-Plug 'mhartington/nvim-typescript', { 'build': './install.sh' }
-Plug 'Shougo/deoplete.nvim'
-Plug 'Shougo/denite.nvim'
 
 " Gist
 Plug 'mattn/webapi-vim'
@@ -80,12 +77,11 @@ Plug 'tpope/vim-fugitive'
 " JS tests
 Plug 'janko-m/vim-test'
 
-" Color schemes / colors
-Plug 'chriskempson/base16-vim'
-Plug 'ap/vim-css-color'
-
 " Async linting
 Plug 'w0rp/ale'
+
+" Color
+Plug 'w0ng/vim-hybrid'
 
 call plug#end()
 
@@ -156,11 +152,11 @@ set timeoutlen=500
 set laststatus=2                  " Show the status line all the time
 set statusline=%f
 
-if filereadable(expand("~/.vimrc_background"))
-  let base16colorspace=256
-  source ~/.vimrc_background
-endif
-colorscheme base16-default-dark
+" color scheme
+set background=dark
+colorscheme hybrid
+let g:disable_float_bg = 1
+
 
 " hide the tilde's at the end of the buffer
 highlight EndOfBuffer ctermfg=black ctermbg=black
@@ -275,6 +271,8 @@ map <leader>e :!%:p<cr>
 " rename current file
 map <leader>n :call RenameFile()<cr>
 
+" Auto open NERDTree
+au VimEnter * NERDTree
 " File tree browser - backslash
 map \ :NERDTreeToggle<CR>
 " File tree browser showing current file - pipe
@@ -285,6 +283,10 @@ let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '\.git',
       \ '\.DS_Store', '\.vscode', '__pycache__', '^tags', '^tags.lock$',
       \ '^tags.temp$', '^coverage', '^build\/', '__init__.py']
+" Go to previous (last accessed) window to focus on file
+autocmd VimEnter * wincmd p
+" Close the tab if NERDTree is the only window remaining in it.
+autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | call feedkeys(":quit\<CR>:\<BS>") | endif
 
 silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 
@@ -374,7 +376,7 @@ map <leader>d :redraw! <CR>
 
 " Lightline
 let g:lightline = {
-\ 'colorscheme': 'wombat',
+\ 'colorscheme': 'rosepine',
 \ 'active': {
 \   'left': [['mode', 'paste'], ['filename', 'modified']],
 \   'right': [['lineinfo'], ['percent'], ['readonly', 'linter_warnings', 'linter_errors', 'linter_ok']]

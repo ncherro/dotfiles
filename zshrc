@@ -39,7 +39,7 @@ export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/
 export PATH=$PATH:~/Library/Python/2.7/bin
 export PATH=$PATH:~/Projects/namely/grpc/bins/opt
 
-export EDITOR='nvim'
+export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/New_York
@@ -120,7 +120,7 @@ else
     ssh-add
 fi
 
-alias v="nvim"
+alias v="vim"
 
 ulimit -n 10000
 
@@ -163,10 +163,6 @@ alias dc=docker-compose
 #alias dmc=docker-machine
 #alias edmc='eval $(docker-machine env default)'
 
-# k8s
-export KUBECONFIG=/Users/nickherro/.kube/config
-export TILLER_NAMESPACE=default
-
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
 
@@ -180,3 +176,37 @@ alias ngrok="~/ngrok"
 export NVM_DIR="$HOME/.nvm"
 [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
 [ -s "/usr/local/opt/nvm/etc/bash_completion" ] && . "/usr/local/opt/nvm/etc/bash_completion"  # This loads nvm bash_completion
+export PATH=/opt/spotify-devex/bin:$PATH
+
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+
+# Spotify goldenpath
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+
+if type brew &>/dev/null; then
+    FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
+
+    autoload -Uz compinit
+    compinit
+
+    source "$(brew --prefix)/opt/zsh-git-prompt/zshrc.sh"
+    PROMPT='%B%m%~%b$(git_super_status) %# '
+fi
+
+source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
+source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
+
+source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
+source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
+
+
+alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
+alias k8s-prod-clusters="gcloud container clusters list --project=gke-xpn-1 --filter=\"resourceLabels[env]=production\" --format=\"value(name)\""
+alias k8s-sync="kubectl site sync-creds"
+
+export BGP_SERVICE_ID="nicholash-golden-path-tutorial"
+export BGP_SERVICE_ID_WITHOUT_DASHES="nicholashgoldenpathtutorial"
+export WORKSPACE="$HOME/workspace"
