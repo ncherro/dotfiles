@@ -24,6 +24,7 @@ antigen bundle zsh-users/zsh-syntax-highlighting
 antigen apply
 
 # https://github.com/sindresorhus/pure
+autoload -U promptinit; promptinit
 prompt pure
 
 # Base16 Shell
@@ -44,7 +45,6 @@ export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/New_York
 export SHELL=/usr/local/bin/zsh
-
 
 # git
 export GIT_MERGE_AUTOEDIT=no
@@ -143,10 +143,11 @@ export GO111MODULE=on
   #(git ls-tree -r --name-only HEAD ||
        #find . -path "*/\.*" -prune -o -type f -print -o -type l -print |
         #sed s/^..//) 2> /dev/null'
-
 export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow --glob "!.git/*"'
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+#[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+# Set up fzf key bindings and fuzzy completion
+source <(fzf --zsh)
 
 #alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
 export PATH="$HOME/.exenv/bin:$PATH"
@@ -173,10 +174,14 @@ alias an="cd ~/Projects/anchor"
 
 alias ngrok="~/ngrok"
 
+# focus
+alias focus="sudo bash ~/block-sites.sh"
+alias unfocus="sudo bash ~/unblock-sites.sh"
+
 export NVM_DIR="$HOME/.nvm"
-[ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/usr/local/opt/nvm/etc/bash_completion" ] && . "/usr/local/opt/nvm/etc/bash_completion"  # This loads nvm bash_completion
-export PATH=/opt/work-devex/bin:$PATH
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 export SDKMAN_DIR="$HOME/.sdkman"
@@ -207,6 +212,17 @@ alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
 alias k8s-prod-clusters="gcloud container clusters list --project=your-project --filter=\"resourceLabels[env]=production\" --format=\"value(name)\""
 alias k8s-sync="kubectl site sync-creds"
 
+alias gitpersonal="git config user.email \"ncherro@gmail.com\""
+alias gitwork="git config user.email \"you@yourcompany.com\""
+
 export BGP_SERVICE_ID="you-golden-path-tutorial"
 export BGP_SERVICE_ID_WITHOUT_DASHES="yougoldenpathtutorial"
 export WORKSPACE="$HOME/workspace"
+
+
+export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
+export PATH="/Users/you/workspace/dev/scripts:$PATH"
+
+source ~/.work.config
+
+export PATH=/opt/work-devex/bin:$PATH
