@@ -37,6 +37,7 @@ Plug 'mattn/gist-vim'
 Plug 'scrooloose/nerdcommenter'
 Plug 'godlygeek/tabular'
 Plug 'editorconfig/editorconfig-vim'
+Plug 'prettier/vim-prettier', { 'do': 'yarn install --frozen-lockfile --production' }
 
 " Autocomplete
 Plug 'tpope/vim-surround'
