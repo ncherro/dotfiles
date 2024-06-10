@@ -27,24 +27,12 @@ antigen apply
 autoload -U promptinit; promptinit
 prompt pure
 
-# Base16 Shell
-BASE16_SHELL="$HOME/.config/base16-shell/"
-[ -n "$PS1" ] && \
-    [ -s "$BASE16_SHELL/profile_helper.sh" ] && \
-        eval "$("$BASE16_SHELL/profile_helper.sh")"
-
-# /usr/local/ first, for homebrew
-PATH=/usr/local/bin:/usr/local/sbin:$PATH
-export PATH=/usr/local/share/npm/bin:$PATH
-export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
-export PATH=$PATH:~/Library/Python/2.7/bin
-export PATH=$PATH:~/Projects/namely/grpc/bins/opt
 
 export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
-export TZ=America/New_York
-export SHELL=/usr/local/bin/zsh
+export TZ=America/Chicago
+export SHELL=/opt/homebrew/bin/zsh
 
 # git
 export GIT_MERGE_AUTOEDIT=no
@@ -129,29 +117,10 @@ export CLICOLOR=1
 # nodejs modules
 export NODE_PATH=/usr/local/lib/node_modules
 
-## Go
-export GOPATH=$HOME/go
-export GOROOT=/usr/local/opt/go/libexec
-export GOBIN=$GOPATH/bin
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:$GOROOT/bin
-export GIT_TERMINAL_PROMPT=1 # allow go get for github repos
-export GO111MODULE=on
 
-
-#export FZF_DEFAULT_COMMAND='
-  #(git ls-tree -r --name-only HEAD ||
-       #find . -path "*/\.*" -prune -o -type f -print -o -type l -print |
-        #sed s/^..//) 2> /dev/null'
-export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow --glob "!.git/*"'
-
-#[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 # Set up fzf key bindings and fuzzy completion
 source <(fzf --zsh)
-
-#alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
-export PATH="$HOME/.exenv/bin:$PATH"
-#eval "$(exenv init -)"
+export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
 
 alias gti="git"
 
@@ -161,16 +130,12 @@ function exportFile() {
 
 alias dco=docker-compose
 alias dc=docker-compose
-#alias dmc=docker-machine
-#alias edmc='eval $(docker-machine env default)'
 
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
 
 # profile zsh
 # zprof
-
-alias an="cd ~/Projects/anchor"
 
 alias ngrok="~/ngrok"
 
@@ -182,11 +147,9 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
-
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
-
 
 # Spotify goldenpath
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
@@ -207,7 +170,6 @@ source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
 source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
 source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
 
-
 alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
 alias k8s-prod-clusters="gcloud container clusters list --project=gke-xpn-1 --filter=\"resourceLabels[env]=production\" --format=\"value(name)\""
 alias k8s-sync="kubectl site sync-creds"
@@ -219,10 +181,13 @@ export BGP_SERVICE_ID="nicholash-golden-path-tutorial"
 export BGP_SERVICE_ID_WITHOUT_DASHES="nicholashgoldenpathtutorial"
 export WORKSPACE="$HOME/workspace"
 
-
-export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
-export PATH="/Users/nicholash/workspace/dev/scripts:$PATH"
+# /usr/local/ first, for homebrew
+export PATH=/usr/local/bin:/usr/local/sbin:$PATH # do we still need this?
+export PATH=/opt/homebrew/bin:$PATH
+export PATH=/usr/local/share/npm/bin:$PATH
+export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
+export PATH=/opt/homebrew/opt/mysql-client/bin:$PATH
+export PATH=/Users/nicholash/workspace/dev/scripts:$PATH
+export PATH=/opt/spotify-devex/bin:$PATH
 
 source ~/.spotify.config
-
-export PATH=/opt/spotify-devex/bin:$PATH
