@@ -143,11 +143,10 @@ export GO111MODULE=on
   #(git ls-tree -r --name-only HEAD ||
        #find . -path "*/\.*" -prune -o -type f -print -o -type l -print |
         #sed s/^..//) 2> /dev/null'
+
 export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow --glob "!.git/*"'
 
-#[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-# Set up fzf key bindings and fuzzy completion
-source <(fzf --zsh)
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 #alias elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch17/config/elasticsearch.yml"
 export PATH="$HOME/.exenv/bin:$PATH"
@@ -179,9 +178,9 @@ alias focus="sudo bash ~/block-sites.sh"
 alias unfocus="sudo bash ~/unblock-sites.sh"
 
 export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
-
+[ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/usr/local/opt/nvm/etc/bash_completion" ] && . "/usr/local/opt/nvm/etc/bash_completion"  # This loads nvm bash_completion
+export PATH=/opt/spotify-devex/bin:$PATH
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 export SDKMAN_DIR="$HOME/.sdkman"
@@ -219,10 +218,7 @@ export BGP_SERVICE_ID="nicholash-golden-path-tutorial"
 export BGP_SERVICE_ID_WITHOUT_DASHES="nicholashgoldenpathtutorial"
 export WORKSPACE="$HOME/workspace"
 
-
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
-export PATH="/Users/nicholash/workspace/dev/scripts:$PATH"
 
 source ~/.spotify.config
 
-export PATH=/opt/spotify-devex/bin:$PATH

@@ -4,7 +4,7 @@
 call plug#begin()
 
 " Navigation
-Plug '/usr/local/opt/fzf'
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 Plug 'preservim/nerdtree'
 Plug 'vim-scripts/IndexedSearch'
@@ -15,9 +15,11 @@ Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax
 Plug 'pangloss/vim-javascript'
+Plug 'leafgarland/typescript-vim'
 Plug 'slim-template/vim-slim'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
+
 " Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 Plug 'editorconfig/editorconfig-vim'
 Plug 'cespare/vim-toml'
@@ -156,6 +158,8 @@ set statusline=%f
 set background=dark
 colorscheme hybrid
 let g:disable_float_bg = 1
+
+set shell=/bin/zsh
 
 
 " hide the tilde's at the end of the buffer
