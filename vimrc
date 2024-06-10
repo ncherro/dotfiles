@@ -6,6 +6,7 @@ call plug#begin()
 " Navigation
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
+Plug '/opt/homebrew/opt/fzf'
 Plug 'preservim/nerdtree'
 Plug 'vim-scripts/IndexedSearch'
 Plug 'vim-scripts/matchit.zip'
@@ -443,11 +444,18 @@ let g:jsx_ext_required = 0
 " fzf
 nnoremap <Leader>ff :GitFiles<CR>
 nnoremap <Leader>fb :Buffers<CR>
-nnoremap <Leader>fa :Find<Space>
 nnoremap <C-p> :GitFiles<CR>
+nnoremap <C-t> :RG<CR>
+nnoremap <silent><leader>f :FZF -q <C-R>=expand("<cword>")<CR><CR>
 
 " ripgrep
 let g:rg_highlight = 1
+set grepprg=rg\ --vimgrep\ --smart-case\ --hidden\ --follow
+let g:rg_derive_root='true'
+nnoremap <C-T> :Files<cr>
+nnoremap <Leader>b :Buffers<cr>
+nnoremap <Leader>s :BLines<cr>
+
 
 " --column: Show column number
 " --line-number: Show line number
@@ -458,7 +466,7 @@ let g:rg_highlight = 1
 " --follow: Follow symlinks
 " --glob: Additional conditions for search (in this case ignore everything in the .git/ folder)
 " --color: Search color options
-command! -bang -nargs=* Find call fzf#vim#grep('rg --column --line-number --no-heading --fixed-strings --ignore-case --hidden --follow --glob "!.git/*" --color "always" '.shellescape(<q-args>), 1, <bang>0)
+" command! -bang -nargs=* Find call fzf#vim#grep('rg --column --line-number --no-heading --fixed-strings --ignore-case --hidden --follow --glob "!.git/*" --color "always" '.shellescape(<q-args>), 1, <bang>0)
 
 " datetime
 :nnoremap <F5> "=strftime("%FT%T%z")<CR>P
