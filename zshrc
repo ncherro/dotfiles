@@ -19,13 +19,10 @@ antigen bundle prompt
 
 # other bundles
 antigen bundle zsh-users/zsh-syntax-highlighting
+# antigen bundle bobsoppe/zsh-ssh-agent - just run `ssh-add -k` after startup to add keys
 
 # apply ^
 antigen apply
-
-# https://github.com/sindresorhus/pure
-autoload -U promptinit; promptinit
-prompt pure
 
 
 export EDITOR='vim'
@@ -40,6 +37,8 @@ alias g-='gco -'
 alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
 alias gd='gwd'
+alias gsq='git reset --soft $(git merge-base master HEAD)' # squash all commits in branch
+alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d' # delete all merged branches
 
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
@@ -93,20 +92,6 @@ alias stamp="date +%F-%H%M%S"
 
 # disable autocorrect
 alias cap="nocorrect cap"
-
-# ssh agent
-if [ -f ~/.agent.env ] ; then
-    . ~/.agent.env > /dev/null
-if ! kill -0 $SSH_AGENT_PID > /dev/null 2>&1; then
-    echo "Stale agent file found. Spawning new agent… "
-    eval `ssh-agent | tee ~/.agent.env`
-    ssh-add
-fi 
-else
-    echo "Starting ssh-agent"
-    eval `ssh-agent | tee ~/.agent.env`
-    ssh-add
-fi
 
 alias v="vim"
 
@@ -164,6 +149,10 @@ if type brew &>/dev/null; then
     PROMPT='%B%m%~%b$(git_super_status) %# '
 fi
 
+# https://github.com/sindresorhus/pure
+autoload -Uz promptinit; promptinit
+prompt pure
+
 source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
 source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
 
@@ -181,13 +170,17 @@ export BGP_SERVICE_ID="nicholash-golden-path-tutorial"
 export BGP_SERVICE_ID_WITHOUT_DASHES="nicholashgoldenpathtutorial"
 export WORKSPACE="$HOME/workspace"
 
-# /usr/local/ first, for homebrew
 export PATH=/usr/local/bin:/usr/local/sbin:$PATH # do we still need this?
-export PATH=/opt/homebrew/bin:$PATH
+export PATH=/opt/homebrew/bin:$PATH # the new m1 mac homebrew path
 export PATH=/usr/local/share/npm/bin:$PATH
-export PATH=$PATH:~/Development/android-sdk-macosx/platform-tools:~/Development/android-sdk-macosx/tools
 export PATH=/opt/homebrew/opt/mysql-client/bin:$PATH
 export PATH=/Users/nicholash/workspace/dev/scripts:$PATH
 export PATH=/opt/spotify-devex/bin:$PATH
+
+alias ws="cd $WORKSPACE";
+
+function ecr-login() {
+  aws ecr get-login-password | docker login --username AWS --password-stdin 523887678637.dkr.ecr.us-east-1.amazonaws.com
+}
 
 source ~/.spotify.config

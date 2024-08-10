@@ -20,6 +20,7 @@ Plug 'leafgarland/typescript-vim'
 Plug 'slim-template/vim-slim'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
+Plug 'hashivim/vim-terraform'
 
 " Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 Plug 'editorconfig/editorconfig-vim'
@@ -86,6 +87,9 @@ Plug 'w0rp/ale'
 
 " Color
 Plug 'w0ng/vim-hybrid'
+
+" Debugging
+Plug 'puremourning/vimspector'
 
 call plug#end()
 
@@ -242,6 +246,21 @@ nnoremap <C-j> <C-w>j
 nnoremap <C-k> <C-w>k
 nnoremap <C-h> <C-w>h
 nnoremap <C-l> <C-w>l
+
+" Debugging
+let g:vimspector_base_dir='/Users/nicholash/.vim/plugged/vimspector'
+
+nnoremap <Leader>dd :call vimspector#Launch()<CR>
+nnoremap <Leader>de :call vimspector#Reset()<CR>
+nnoremap <Leader>dc :call vimspector#Continue()<CR>
+
+nnoremap <Leader>dt :call vimspector#ToggleBreakpoint()<CR>
+nnoremap <Leader>dT :call vimspector#ClearBreakpoints()<CR>
+
+nmap <Leader>dk <Plug>VimspectorRestart
+nmap <Leader>dh <Plug>VimspectorStepOut
+nmap <Leader>dl <Plug>VimspectorStepInto
+nmap <Leader>dj <Plug>VimspectorStepOver
 
 " Insert blank lines without going into insert mode
 nmap go o<esc>
