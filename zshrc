@@ -4,7 +4,7 @@
 export HISTFILE=~/.zhistory
 
 # Antigen config
-source /opt/homebrew/share/antigen/antigen.zsh
+source ~/antigen/antigen.zsh
 
 # use the prezto framework
 antigen use prezto
@@ -29,7 +29,6 @@ export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/Chicago
-export SHELL=/opt/homebrew/bin/zsh
 
 # git
 export GIT_MERGE_AUTOEDIT=no
@@ -128,59 +127,16 @@ alias ngrok="~/ngrok"
 alias focus="sudo bash ~/block-sites.sh"
 alias unfocus="sudo bash ~/unblock-sites.sh"
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
-
-#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-export SDKMAN_DIR="$HOME/.sdkman"
-[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
-
-# Spotify goldenpath
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
-
-if type brew &>/dev/null; then
-    FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
-
-    autoload -Uz compinit
-    compinit
-
-    source "$(brew --prefix)/opt/zsh-git-prompt/zshrc.sh"
-    PROMPT='%B%m%~%b$(git_super_status) %# '
-fi
-
 # https://github.com/sindresorhus/pure
 autoload -Uz promptinit; promptinit
 prompt pure
-
-source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
-source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
-
-source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
-source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
 
 alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
 alias k8s-prod-clusters="gcloud container clusters list --project=gke-xpn-1 --filter=\"resourceLabels[env]=production\" --format=\"value(name)\""
 alias k8s-sync="kubectl site sync-creds"
 
 alias gitpersonal="git config user.email \"ncherro@gmail.com\""
-alias gitwork="git config user.email \"nicholash@spotify.com\""
 
-export BGP_SERVICE_ID="nicholash-golden-path-tutorial"
-export BGP_SERVICE_ID_WITHOUT_DASHES="nicholashgoldenpathtutorial"
 export WORKSPACE="$HOME/workspace"
 
-export PATH=/usr/local/bin:/usr/local/sbin:$PATH # do we still need this?
-export PATH=/opt/homebrew/bin:$PATH # the new m1 mac homebrew path
-export PATH=/usr/local/share/npm/bin:$PATH
-export PATH=/opt/homebrew/opt/mysql-client/bin:$PATH
-export PATH=/Users/nicholash/workspace/dev/scripts:$PATH
-export PATH=/opt/spotify-devex/bin:$PATH
-
 alias ws="cd $WORKSPACE";
-
-function ecr-login() {
-  aws ecr get-login-password | docker login --username AWS --password-stdin 523887678637.dkr.ecr.us-east-1.amazonaws.com
-}
-
-source ~/.spotify.config
