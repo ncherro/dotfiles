@@ -98,6 +98,7 @@ alias v="vim"
 ulimit -n 10000
 
 export CLICOLOR=1
+export LSCOLORS=ExFxBxDxCxegedabagacad
 
 # nodejs modules
 export NODE_PATH=/usr/local/lib/node_modules
@@ -132,12 +133,38 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
+# place this after nvm initialization!
+autoload -U add-zsh-hook
+
+load-nvmrc() {
+local nvmrc_path
+nvmrc_path="$(nvm_find_nvmrc)"
+if [ -n "$nvmrc_path" ]; then
+	local nvmrc_node_version
+	nvmrc_node_version=$(nvm version "$(cat "${nvmrc_path}")")
+
+	if [ "$nvmrc_node_version" = "N/A" ]; then
+		nvm install
+	elif [ "$nvmrc_node_version" != "$(nvm version)" ]; then
+		nvm use
+	fi
+elif [ -n "$(PWD=$OLDPWD nvm_find_nvmrc)" ] && [ "$(nvm version)" != "$(nvm version default)" ]; then
+	echo "Reverting to nvm default version"
+	nvm use default
+fi
+}
+
+add-zsh-hook chpwd load-nvmrc
+load-nvmrc
+
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+alias mcv='mvn clean verify'
+alias mcg='mvn clean generate-sources'
+alias mvn-clear-cache="rm -Rf ~/.m2/repository" # WARNING - everything will re-download + compile
+
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
-
-# Spotify goldenpath
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
 
 if type brew &>/dev/null; then
     FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
@@ -175,7 +202,6 @@ export PATH=/opt/homebrew/bin:$PATH # the new m1 mac homebrew path
 export PATH=/usr/local/share/npm/bin:$PATH
 export PATH=/opt/homebrew/opt/mysql-client/bin:$PATH
 export PATH=/Users/nicholash/workspace/dev/scripts:$PATH
-export PATH=/opt/spotify-devex/bin:$PATH
 
 alias ws="cd $WORKSPACE";
 
@@ -183,4 +209,8 @@ function ecr-login() {
   aws ecr get-login-password | docker login --username AWS --password-stdin 523887678637.dkr.ecr.us-east-1.amazonaws.com
 }
 
+# use msyql 8.4 client
+echo 'export PATH="/opt/homebrew/opt/mysql-client@8.4/bin:$PATH"' >> ~/.zshrc
+
 source ~/.spotify.config
+export PATH="/opt/homebrew/opt/mysql-client@8.4/bin:$PATH"

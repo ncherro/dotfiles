@@ -21,6 +21,7 @@ Plug 'slim-template/vim-slim'
 Plug 'mtscout6/vim-cjsx'
 Plug 'mxw/vim-jsx'
 Plug 'hashivim/vim-terraform'
+Plug 'jparise/vim-graphql'
 
 " Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 Plug 'editorconfig/editorconfig-vim'
@@ -87,6 +88,7 @@ Plug 'w0rp/ale'
 
 " Color
 Plug 'w0ng/vim-hybrid'
+" Plug 'joshdick/onedark.vim'
 
 " Debugging
 Plug 'puremourning/vimspector'
