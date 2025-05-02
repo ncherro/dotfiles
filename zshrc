@@ -188,11 +188,6 @@ alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/h
 
 source ~/.spotify.config
 
-eval PATH="$(bash --norc -ec 'IFS=:; paths=($PATH); 
-for i in ${!paths[@]}; do 
-if [[ ${paths[i]} == "/Users/nicholash/.pyenv/shims" ]]; then unset 'paths[i]'; 
-fi; done; 
-echo "${paths[*]}"')"
 export PATH="/Users/nicholash/.pyenv/shims:${PATH}"
 export PYENV_SHELL=zsh
 source '/opt/homebrew/Cellar/pyenv/2.5.3/completions/pyenv.zsh'
