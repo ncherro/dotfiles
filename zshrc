@@ -24,87 +24,63 @@ antigen bundle zsh-users/zsh-syntax-highlighting
 # apply ^
 antigen apply
 
-
+# --- Editor and Locale ---
 export EDITOR='vim'
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/Chicago
 export SHELL=/opt/homebrew/bin/zsh
 
-# git
+# --- Git Aliases and Functions ---
 export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
 alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
 alias gd='gwd'
-alias gsq='git reset --soft $(git merge-base master HEAD)' # squash all commits in branch
-alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d' # delete all merged branches
+alias gsq='git reset --soft $(git merge-base master HEAD)'
+alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d'
+alias gs='git switch'
+alias gfr='git pull --rebase'
 
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
 }
 
-# Postgres
+# --- Postgres ---
 export PGDATA=/usr/local/var/postgres
 alias pg-start='pg_ctl -D /usr/local/var/postgres -l /usr/local/var/postgres/server.log start'
 alias pg-stop='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
 alias pg-status='pg_ctl -D /usr/local/var/postgres status'
 
-# tmux
+# --- Tmux ---
 alias tls="tmux ls"
 
 tatt() {
-  tmux at -t $1
+  tmux at -t $1;
 }
 
 tat() {
-  # get the current directory name
   dirname=${PWD##*/}
-  # try to create a new session (hide errors)
-  tmux new -s $dirname # 2>&1 /dev/null
-  # attach to the session
-  tatt $dirname
+  tmux ls | grep "${dirname}" && { tmux at -t $dirname; return 0; }
+  mux ls | grep "${dirname}" && { mux start $dirname; return 0; }
+  tmux new -s $dirname
 }
 
 tks() {
   tmux kill-server
 }
 
-# cd to the git root, then cd one level up then back in to help RVM
-cd.() {
-  cd $(git rev-parse --show-toplevel) && cd ../ && cd -;
-}
-
-# nginx
-alias nginx-start="sudo nginx"
-alias nginx-stop="sudo /usr/local/bin/nginx -s stop"
-alias nginx-reload="sudo /usr/local/bin/nginx -s reload"
-alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
-nginx-restart() {
-  nginx-stop;
-  nginx-start;
-}
-
-# other aliases
+# --- Miscellaneous Aliases and Functions ---
 alias l="ls -alh"
-
 alias stamp="date +%F-%H%M%S"
-
-# disable autocorrect
 alias cap="nocorrect cap"
-
 alias v="vim"
-
 ulimit -n 10000
-
 export CLICOLOR=1
 export LSCOLORS=ExFxBxDxCxegedabagacad
-
-# nodejs modules
 export NODE_PATH=/usr/local/lib/node_modules
 
-
-# Set up fzf key bindings and fuzzy completion
+# --- FZF ---
 source <(fzf --zsh)
 export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
 
@@ -129,11 +105,11 @@ alias ngrok="~/ngrok"
 alias focus="sudo bash ~/block-sites.sh"
 alias unfocus="sudo bash ~/unblock-sites.sh"
 
+# --- NVM ---
 export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
-# place this after nvm initialization!
 autoload -U add-zsh-hook
 
 load-nvmrc() {
@@ -157,35 +133,35 @@ fi
 add-zsh-hook chpwd load-nvmrc
 load-nvmrc
 
+# --- Java & Maven ---
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
 alias mcv='mvn clean verify'
+alias mci='mvn clean install'
 alias mcg='mvn clean generate-sources'
-alias mvn-clear-cache="rm -Rf ~/.m2/repository" # WARNING - everything will re-download + compile
+alias mvn-clear-cache="rm -Rf ~/.m2/repository"
 
-#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+# --- SDKMAN ---
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
 
 if type brew &>/dev/null; then
     FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
-
     autoload -Uz compinit
     compinit
-
     source "$(brew --prefix)/opt/zsh-git-prompt/zshrc.sh"
     PROMPT='%B%m%~%b$(git_super_status) %# '
 fi
 
-# https://github.com/sindresorhus/pure
 autoload -Uz promptinit; promptinit
 prompt pure
 
 source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
 source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
-
 source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
 source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
 
+# --- Kubernetes ---
+alias k8s="kubectl"
 alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
 alias k8s-prod-clusters="gcloud container clusters list --project=gke-xpn-1 --filter=\"resourceLabels[env]=production\" --format=\"value(name)\""
 alias k8s-sync="kubectl site sync-creds"
@@ -197,20 +173,39 @@ export BGP_SERVICE_ID="nicholash-golden-path-tutorial"
 export BGP_SERVICE_ID_WITHOUT_DASHES="nicholashgoldenpathtutorial"
 export WORKSPACE="$HOME/workspace"
 
-export PATH=/usr/local/bin:/usr/local/sbin:$PATH # do we still need this?
-export PATH=/opt/homebrew/bin:$PATH # the new m1 mac homebrew path
-export PATH=/usr/local/share/npm/bin:$PATH
-export PATH=/opt/homebrew/opt/mysql-client/bin:$PATH
-export PATH=/Users/nicholash/workspace/dev/scripts:$PATH
+# --- PATH Setup (consolidated) ---
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/local/share/npm/bin:/opt/homebrew/opt/mysql-client/bin:/Users/nicholash/workspace/dev/scripts:/opt/spotify-devex/bin:/Users/nicholash/.local/bin:/opt/homebrew/opt/mysql-client@8.4/bin:/Users/nicholash/.pyenv/shims:$PATH"
 
-alias ws="cd $WORKSPACE";
+alias ws="cd $WORKSPACE"
 
 function ecr-login() {
   aws ecr get-login-password | docker login --username AWS --password-stdin 523887678637.dkr.ecr.us-east-1.amazonaws.com
 }
 
-# use msyql 8.4 client
-echo 'export PATH="/opt/homebrew/opt/mysql-client@8.4/bin:$PATH"' >> ~/.zshrc
+alias mux="tmuxinator"
+
+alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/.git//' | xargs open"
 
 source ~/.spotify.config
-export PATH="/opt/homebrew/opt/mysql-client@8.4/bin:$PATH"
+
+eval PATH="$(bash --norc -ec 'IFS=:; paths=($PATH); 
+for i in ${!paths[@]}; do 
+if [[ ${paths[i]} == "/Users/nicholash/.pyenv/shims" ]]; then unset 'paths[i]'; 
+fi; done; 
+echo "${paths[*]}"')"
+export PATH="/Users/nicholash/.pyenv/shims:${PATH}"
+export PYENV_SHELL=zsh
+source '/opt/homebrew/Cellar/pyenv/2.5.3/completions/pyenv.zsh'
+command pyenv rehash 2>/dev/null
+pyenv() {
+  local command=${1:-}
+  [ "$#" -gt 0 ] && shift
+  case "$command" in
+  rehash|shell)
+    eval "$(pyenv "sh-$command" "$@")"
+    ;;
+  *)
+    command pyenv "$command" "$@"
+    ;;
+  esac
+}

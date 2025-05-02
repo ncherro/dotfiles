@@ -12,7 +12,7 @@ Plug 'vim-scripts/IndexedSearch'
 Plug 'vim-scripts/matchit.zip'
 Plug 'tpope/vim-unimpaired'
 Plug 'jeetsukumaran/vim-buffergator'
-Plug 'ludovicchabant/vim-gutentags'
+" Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax
 Plug 'pangloss/vim-javascript'
@@ -24,7 +24,6 @@ Plug 'hashivim/vim-terraform'
 Plug 'jparise/vim-graphql'
 
 " Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
-Plug 'editorconfig/editorconfig-vim'
 Plug 'cespare/vim-toml'
 Plug 'uarun/vim-protobuf'
 
@@ -102,12 +101,14 @@ call plug#end()
 syntax enable
 filetype plugin indent on         " load file type plugins + indentation
 
+set synmaxcol=0                   " No column limit for syntax highlighting"
+
 set showcmd                       " Display incomplete commands.
 set showmode                      " Display the mode you're in.
 set showmatch                     " Show matching brackets/parenthesis
 
 " ctags
-set tags=tags
+" set tags=tags
 
 set noswapfile
 set nobackup
