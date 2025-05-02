@@ -383,8 +383,8 @@ let g:jsx_ext_required = 0
 " FZF mappings
 nnoremap <Leader>ff :GitFiles<CR>
 nnoremap <Leader>fb :Buffers<CR>
-noremap <C-p> :GitFiles<CR>
-noremap <C-t> :RG<CR>
+nnoremap <C-p> :GitFiles<CR>
+nnoremap <C-t> :RG<CR>
 nnoremap <silent><leader>f :FZF -q <C-R>=expand("<cword>")<CR><CR>
 
 " Ripgrep config
