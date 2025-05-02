@@ -209,3 +209,4 @@ pyenv() {
     ;;
   esac
 }
+export PATH=/opt/spotify-devex/bin:$PATH
