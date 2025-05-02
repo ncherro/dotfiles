@@ -380,13 +380,6 @@ let g:ale_set_highlights = 0
 " vim-jsx config
 let g:jsx_ext_required = 0
 
-" FZF mappings
-nnoremap <Leader>ff :GitFiles<CR>
-nnoremap <Leader>fb :Buffers<CR>
-nnoremap <C-p> :GitFiles<CR>
-nnoremap <C-t> :RG<CR>
-nnoremap <silent><leader>f :FZF -q <C-R>=expand("<cword>")<CR><CR>
-
 " Ripgrep config
 let g:rg_highlight = 1
 set grepprg=rg\ --vimgrep\ --smart-case\ --hidden\ --follow
@@ -394,6 +387,13 @@ let g:rg_derive_root='true'
 nnoremap <C-T> :Files<cr>
 nnoremap <Leader>b :Buffers<cr>
 nnoremap <Leader>s :BLines<cr>
+
+" FZF mappings
+nnoremap <Leader>ff :GitFiles<CR>
+nnoremap <Leader>fb :Buffers<CR>
+nnoremap <C-p> :GitFiles<CR>
+nnoremap <C-t> :Rg<CR>
+nnoremap <silent><leader>f :FZF -q <C-R>=expand("<cword>")<CR><CR>
 
 " Datetime mappings
 nnoremap <F5> "=strftime("%FT%T%z")<CR>P
