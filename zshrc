@@ -189,7 +189,14 @@ function ecr-login() {
 
 alias mux="tmuxinator"
 
+# open in github / GHE
 alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/.git//' | xargs open"
+
+# cd to git project root
+cd.() {
+  cd $(git rev-parse --show-toplevel) && cd ../ && cd -;
+}
+
 
 source ~/.spotify.config
 
