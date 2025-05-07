@@ -3,26 +3,29 @@
 
 export HISTFILE=~/.zhistory
 
-# Antigen config
-source /opt/homebrew/share/antigen/antigen.zsh
+if [[ -z $ANTIGEN_LOADED ]]; then
+  export ANTIGEN_LOADED=1
+  # Antigen config
+  source /opt/homebrew/share/antigen/antigen.zsh
 
-# use the prezto framework
-antigen use prezto
+  # use the prezto framework
+  antigen use prezto
 
-# load prezto modules
-antigen bundle history
-antigen bundle helper
-antigen bundle editor
-antigen bundle git
-antigen bundle tmux
-antigen bundle prompt
+  # load prezto modules
+  antigen bundle history
+  antigen bundle helper
+  antigen bundle editor
+  antigen bundle git
+  antigen bundle tmux
+  antigen bundle prompt
 
-# other bundles
-antigen bundle zsh-users/zsh-syntax-highlighting
-# antigen bundle bobsoppe/zsh-ssh-agent - just run `ssh-add -k` after startup to add keys
+  # other bundles
+  antigen bundle zsh-users/zsh-syntax-highlighting
+  # antigen bundle bobsoppe/zsh-ssh-agent - just run `ssh-add -k` after startup to add keys
 
-# apply ^
-antigen apply
+  # apply ^
+  antigen apply
+fi
 
 # --- Editor and Locale ---
 export EDITOR='vim'
