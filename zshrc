@@ -96,6 +96,9 @@ alias dc=docker-compose
 alias gsha="git rev-parse --short HEAD"
 alias h="history"
 
+setopt inc_append_history
+setopt share_history
+
 # profile zsh
 # zprof
 
@@ -139,6 +142,7 @@ alias mcv='mvn clean verify'
 alias mci='mvn clean install'
 alias mcg='mvn clean generate-sources'
 alias mvn-clear-cache="rm -Rf ~/.m2/repository"
+alias openapi-generator-cli='java -jar ~/openapi-generator-cli.jar'
 
 # --- SDKMAN ---
 export SDKMAN_DIR="$HOME/.sdkman"
@@ -175,6 +179,7 @@ export WORKSPACE="$HOME/workspace"
 
 # --- PATH Setup (consolidated) ---
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/local/share/npm/bin:/opt/homebrew/opt/mysql-client/bin:/Users/nicholash/workspace/dev/scripts:/opt/spotify-devex/bin:/Users/nicholash/.local/bin:/opt/homebrew/opt/mysql-client@8.4/bin:/Users/nicholash/.pyenv/shims:$PATH"
+export PATH="/Applications/IntelliJ IDEA.app/Contents/MacOS:$PATH"
 
 alias ws="cd $WORKSPACE"
 
