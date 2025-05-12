@@ -197,7 +197,7 @@ alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/h
 
 # cd to git project root
 cd.() {
-  cd $(git rev-parse --show-toplevel) && cd ../ && cd -;
+  cd "$(git rev-parse --show-toplevel)"
 }
 
 
