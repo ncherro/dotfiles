@@ -36,6 +36,7 @@ export SHELL=/opt/homebrew/bin/zsh
 
 # --- Git Aliases and Functions ---
 export GIT_MERGE_AUTOEDIT=no
+alias gp='git push'
 alias gco='git checkout'
 alias g-='gco -'
 alias gpf='git pf'
