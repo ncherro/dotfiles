@@ -46,6 +46,7 @@ alias gsq='git reset --soft $(git merge-base master HEAD)'
 alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d'
 alias gs='git switch'
 alias gfr='git pull --rebase'
+alias glo='git log'
 
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
