@@ -4,7 +4,7 @@
 export HISTFILE=~/.zhistory
 
 # Antigen config
-source ~/antigen/antigen.zsh
+source ~/antigen.zsh
 
 # use the prezto framework
 antigen use prezto
@@ -140,3 +140,5 @@ alias gitpersonal="git config user.email \"ncherro@gmail.com\""
 export WORKSPACE="$HOME/workspace"
 
 alias ws="cd $WORKSPACE";
+
+export LD_LIBRARY_PATH=/home/ebenezer/workspace/vid.stab:$LD_LIBRARY_PATH
