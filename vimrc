@@ -18,7 +18,7 @@ Plug 'vim-scripts/IndexedSearch'
 Plug 'vim-scripts/matchit.zip'
 Plug 'tpope/vim-unimpaired'
 Plug 'jeetsukumaran/vim-buffergator'
-Plug 'ludovicchabant/vim-gutentags'
+" Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax
 Plug 'pangloss/vim-javascript'
@@ -111,7 +111,7 @@ set showmode                      " Display the mode you're in.
 set showmatch                     " Show matching brackets/parenthesis
 
 " ctags
-set tags=tags
+" set tags=tags
 
 set noswapfile
 set nobackup
