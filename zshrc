@@ -144,6 +144,8 @@ load-nvmrc
 
 # --- Java & Maven ---
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+alias mcl='mvn clean'
+alias mve='mvn verify'
 alias mcv='mvn clean verify'
 alias mci='mvn clean install'
 alias mcg='mvn clean generate-sources'
