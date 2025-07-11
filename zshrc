@@ -46,6 +46,7 @@ alias gsq='git reset --soft $(git merge-base master HEAD)'
 alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d'
 alias gs='git switch'
 alias gfr='git pull --rebase'
+alias gfa='git fetch --all'
 alias glo='git log'
 
 deletemerged() {
@@ -67,9 +68,18 @@ tatt() {
 
 tat() {
   dirname=${PWD##*/}
-  tmux ls | grep "${dirname}" && { tmux at -t $dirname; return 0; }
-  mux ls | grep "${dirname}" && { mux start $dirname; return 0; }
-  tmux new -s $dirname
+  # Check for an exact match in tmux session names
+  if tmux ls 2>/dev/null | grep -q "^${dirname}:"; then
+    tmux at -t "$dirname"
+    return 0
+  fi
+  # If using mux (tmuxinator), check for an exact match
+  if mux ls 2>/dev/null | grep -q "^${dirname}"; then
+    mux start "$dirname"
+    return 0
+  fi
+  # Otherwise, create a new tmux session
+  tmux new -s "$dirname"
 }
 
 tks() {
@@ -177,6 +187,7 @@ alias k8s="kubectl"
 alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
 alias k8s-prod-clusters="gcloud container clusters list --project=gke-xpn-1 --filter=\"resourceLabels[env]=production\" --format=\"value(name)\""
 alias k8s-sync="kubectl site sync-creds"
+alias k8s-bash='k8s exec -it $(k8s get po | grep Running | awk "{print $1}" | tail -n 1) -- bash'
 
 alias gitpersonal="git config user.email \"ncherro@gmail.com\""
 alias gitwork="git config user.email \"nicholash@spotify.com\""
@@ -207,10 +218,14 @@ cd.() {
 
 
 source ~/.spotify.config
+source ~/.env
 
 export PATH="/Users/nicholash/.pyenv/shims:${PATH}"
 export PYENV_SHELL=zsh
-source '/opt/homebrew/Cellar/pyenv/2.5.3/completions/pyenv.zsh'
+if command -v pyenv >/dev/null; then
+  completions_dir="$(pyenv root)/completions/pyenv.zsh"
+  [ -f "$completions_dir" ] && source "$completions_dir"
+fi
 command pyenv rehash 2>/dev/null
 pyenv() {
   local command=${1:-}
