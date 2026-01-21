@@ -36,9 +36,9 @@ export SHELL=/opt/homebrew/bin/zsh
 
 # --- Git Aliases and Functions ---
 export GIT_MERGE_AUTOEDIT=no
+
+# Git aliases
 alias gp='git push'
-alias gco='git checkout'
-alias g-='gco -'
 alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
 alias gd='gwd'
@@ -48,6 +48,21 @@ alias gs='git switch'
 alias gfr='git pull --rebase'
 alias gfa='git fetch --all'
 alias glo='git log'
+
+# gco: git checkout with auto-prefix for new branches
+gco() {
+  if [[ "$1" == "-b" && -n "$2" && "$2" != $USER/* ]]; then
+    git checkout -b "$USER/$2" "${@:3}"
+  else
+    git checkout "$@"
+  fi
+}
+alias g-='gco -'
+
+# Branch completion for git aliases (workaround for git 2.52+ bug)
+_git_branch_complete() {
+  compadd ${(f)"$(git branch -a 2>/dev/null | sed 's/^[* ]*//' | sed 's|remotes/origin/||' | sort -u)"}
+}
 
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
@@ -60,7 +75,17 @@ alias pg-stop='pg_ctl -D /usr/local/var/postgres stop -s -m fast'
 alias pg-status='pg_ctl -D /usr/local/var/postgres status'
 
 # --- Tmux ---
-alias tls="tmux ls"
+# Show sessions with indicator for running processes
+tls() {
+  tmux ls -F '#{session_name}' 2>/dev/null | while read -r session; do
+    procs=$(tmux list-windows -t "$session" -F '#{pane_current_command}' | grep -v '^zsh$' | tr '\n' ' ')
+    if [[ -n "$procs" ]]; then
+      echo "⚡ $session: $procs"
+    else
+      echo "  $session"
+    fi
+  done
+}
 
 tatt() {
   tmux at -t $1;
@@ -157,8 +182,11 @@ export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
 alias mcl='mvn clean'
 alias mve='mvn verify'
 alias mcv='mvn clean verify'
+alias mcut='mvn clean verify -DskipITs' # only clean, verify, and run unit tests
+alias mcit='mvn clean verify -Dsurefire.skip=true' # only clean, verify, and run integration tests
 alias mci='mvn clean install'
 alias mcg='mvn clean generate-sources'
+alias mcp='mvn clean package -P uberJar' # do this before `java-run`
 alias mvn-clear-cache="rm -Rf ~/.m2/repository"
 alias openapi-generator-cli='java -jar ~/openapi-generator-cli.jar'
 
@@ -170,6 +198,7 @@ if type brew &>/dev/null; then
     FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
     autoload -Uz compinit
     compinit
+    compdef _git_branch_complete gco gs
     source "$(brew --prefix)/opt/zsh-git-prompt/zshrc.sh"
     PROMPT='%B%m%~%b$(git_super_status) %# '
 fi
@@ -209,18 +238,38 @@ function ecr-login() {
 alias mux="tmuxinator"
 
 # open in github / GHE
-alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/.git//' | xargs open"
+alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/\.git//' | xargs open"
+
+# find and open the PR for current branch
+ghpr() {
+  gh pr view --web 2>/dev/null || echo "No PR found for branch: $(git rev-parse --abbrev-ref HEAD)"
+}
+
+# open Jira ticket from branch name (e.g., nicholash/ABC-1234-foo-bar -> http://jira.com/browse/ABC-1234)
+jira() {
+  local branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  local key=$(echo "$branch" | grep -oE '[A-Z]{2,}-[0-9]+' | head -1)
+  if [[ -n "$key" ]]; then
+    open "https://spotify.atlassian.net/browse/$key"
+  else
+    echo "No Jira key found in branch: $branch"
+  fi
+}
 
 # cd to git project root
 cd.() {
   cd "$(git rev-parse --show-toplevel)"
 }
 
+alias c=claude
 
-source ~/.spotify.config
-source ~/.env
+alias bazel=bazelisk
 
-export PATH="/Users/nicholash/.pyenv/shims:${PATH}"
+# add our scripts dir to the PATH
+export PATH="$HOME/scripts:${PATH}"
+
+# Spotify stuff
+export PATH="$HOME/.pyenv/shims:${PATH}"
 export PYENV_SHELL=zsh
 if command -v pyenv >/dev/null; then
   completions_dir="$(pyenv root)/completions/pyenv.zsh"
@@ -239,4 +288,10 @@ pyenv() {
     ;;
   esac
 }
+
+source ~/.spotify.config
+source ~/.env
+
+# Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
+export PATH="$PATH:$HOME/.rvm/bin"
 export PATH=/opt/spotify-devex/bin:$PATH
