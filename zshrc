@@ -3,29 +3,12 @@
 
 export HISTFILE=~/.zhistory
 
-if [[ -z $ANTIGEN_LOADED ]]; then
-  export ANTIGEN_LOADED=1
-  # Antigen config
-  source /opt/homebrew/share/antigen/antigen.zsh
+# Cache brew prefix to avoid repeated subprocess calls (~500ms savings)
+export HOMEBREW_PREFIX="${HOMEBREW_PREFIX:-/opt/homebrew}"
 
-  # use the prezto framework
-  antigen use prezto
-
-  # load prezto modules
-  antigen bundle history
-  antigen bundle helper
-  antigen bundle editor
-  antigen bundle git
-  antigen bundle tmux
-  antigen bundle prompt
-
-  # other bundles
-  antigen bundle zsh-users/zsh-syntax-highlighting
-  # antigen bundle bobsoppe/zsh-ssh-agent - just run `ssh-add -k` after startup to add keys
-
-  # apply ^
-  antigen apply
-fi
+# Antidote plugin manager (faster than antigen)
+source $HOMEBREW_PREFIX/opt/antidote/share/antidote/antidote.zsh
+antidote load ${ZDOTDIR:-$HOME}/.zsh_plugins.txt
 
 # --- Editor and Locale ---
 export EDITOR='vim'
@@ -41,7 +24,7 @@ export GIT_MERGE_AUTOEDIT=no
 alias gp='git push'
 alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
-alias gd='gwd'
+alias gd='git add -N . && git diff && git reset'
 alias gsq='git reset --soft $(git merge-base master HEAD)'
 alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d'
 alias gs='git switch'
@@ -122,7 +105,7 @@ export LSCOLORS=ExFxBxDxCxegedabagacad
 export NODE_PATH=/usr/local/lib/node_modules
 
 # --- FZF ---
-source <(fzf --zsh)
+source <(fzf --zsh 2>/dev/null)
 export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
 
 alias gti="git"
@@ -149,33 +132,24 @@ alias ngrok="~/ngrok"
 alias focus="sudo bash ~/block-sites.sh"
 alias unfocus="sudo bash ~/unblock-sites.sh"
 
-# --- NVM ---
+# --- NVM (lazy loaded for ~1.5s faster startup) ---
 export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
-autoload -U add-zsh-hook
-
-load-nvmrc() {
-local nvmrc_path
-nvmrc_path="$(nvm_find_nvmrc)"
-if [ -n "$nvmrc_path" ]; then
-	local nvmrc_node_version
-	nvmrc_node_version=$(nvm version "$(cat "${nvmrc_path}")")
-
-	if [ "$nvmrc_node_version" = "N/A" ]; then
-		nvm install
-	elif [ "$nvmrc_node_version" != "$(nvm version)" ]; then
-		nvm use
-	fi
-elif [ -n "$(PWD=$OLDPWD nvm_find_nvmrc)" ] && [ "$(nvm version)" != "$(nvm version default)" ]; then
-	echo "Reverting to nvm default version"
-	nvm use default
-fi
+# Lazy load nvm - only initialize when first used
+_load_nvm() {
+  unset -f nvm node npm npx yarn pnpm 2>/dev/null
+  [ -s "$HOMEBREW_PREFIX/opt/nvm/nvm.sh" ] && \. "$HOMEBREW_PREFIX/opt/nvm/nvm.sh"
+  [ -s "$HOMEBREW_PREFIX/opt/nvm/etc/bash_completion.d/nvm" ] && \. "$HOMEBREW_PREFIX/opt/nvm/etc/bash_completion.d/nvm"
 }
 
-add-zsh-hook chpwd load-nvmrc
-load-nvmrc
+nvm() { _load_nvm && nvm "$@"; }
+node() { _load_nvm && node "$@"; }
+npm() { _load_nvm && npm "$@"; }
+npx() { _load_nvm && npx "$@"; }
+yarn() { _load_nvm && yarn "$@"; }
+pnpm() { _load_nvm && pnpm "$@"; }
+
+autoload -U add-zsh-hook
 
 # --- Java & Maven ---
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
@@ -194,22 +168,24 @@ alias openapi-generator-cli='java -jar ~/openapi-generator-cli.jar'
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-if type brew &>/dev/null; then
-    FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
-    autoload -Uz compinit
-    compinit
-    compdef _git_branch_complete gco gs
-    source "$(brew --prefix)/opt/zsh-git-prompt/zshrc.sh"
-    PROMPT='%B%m%~%b$(git_super_status) %# '
+# Use cached HOMEBREW_PREFIX instead of $(brew --prefix) calls
+FPATH=$HOMEBREW_PREFIX/share/zsh-completions:$FPATH
+autoload -Uz compinit
+# Only regenerate compinit dump once per day for faster startup
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C  # Use cached completions
 fi
+compdef _git_branch_complete gco gs
+source "$HOMEBREW_PREFIX/opt/zsh-git-prompt/zshrc.sh"
 
 autoload -Uz promptinit; promptinit
 prompt pure
 
-source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
-source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
-source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
-source "$(brew --prefix)/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
+# Google Cloud SDK (deduplicated - only load once)
+source "$HOMEBREW_PREFIX/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
+source "$HOMEBREW_PREFIX/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
 
 # --- Kubernetes ---
 alias k8s="kubectl"
@@ -295,3 +271,4 @@ source ~/.env
 # Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
 export PATH="$PATH:$HOME/.rvm/bin"
 export PATH=/opt/spotify-devex/bin:$PATH
+alias terminal="open -a Kitty"
