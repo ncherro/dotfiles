@@ -3,26 +3,11 @@
 
 export HISTFILE=~/.zhistory
 
-# Antigen config
-source ~/antigen.zsh
-
-# use the prezto framework
-antigen use prezto
-
-# load prezto modules
-antigen bundle history
-antigen bundle helper
-antigen bundle editor
-antigen bundle git
-antigen bundle tmux
-antigen bundle prompt
-
-# other bundles
-antigen bundle zsh-users/zsh-syntax-highlighting
-# antigen bundle bobsoppe/zsh-ssh-agent - just run `ssh-add -k` after startup to add keys
-
-# apply ^
-antigen apply
+# Antidote config
+# stub pmodload - prezto modules are loaded explicitly via antidote, not the prezto module system
+function pmodload { }
+source ~/.antidote/antidote.zsh
+antidote load ~/Projects/dotfiles/zsh_plugins.txt
 
 
 export EDITOR='vim'
@@ -103,7 +88,7 @@ export NODE_PATH=/usr/local/lib/node_modules
 
 
 # Set up fzf key bindings and fuzzy completion
-source <(fzf --zsh)
+(( $+commands[fzf] )) && source <(fzf --zsh 2>/dev/null)
 export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
 
 alias gti="git"
