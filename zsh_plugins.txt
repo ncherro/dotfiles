@@ -1,0 +1,7 @@
+sorin-ionescu/prezto path:modules/history
+sorin-ionescu/prezto path:modules/helper
+sorin-ionescu/prezto path:modules/editor
+sorin-ionescu/prezto path:modules/git
+sorin-ionescu/prezto path:modules/tmux
+zsh-users/zsh-syntax-highlighting
+sindresorhus/pure kind:fpath
