@@ -30,6 +30,7 @@ alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch 
 alias gs='git switch'
 alias gfr='git pull --rebase'
 alias gfa='git fetch --all'
+alias gfl='spt git:fetch-local && if [ "$(git branch --show-current)" = "master" ]; then git merge --ff-only origin/master; else git fetch . origin/master:master; fi'
 alias glo='git log'
 
 # gco: git checkout with auto-prefix for new branches
@@ -150,6 +151,17 @@ yarn() { _load_nvm && yarn "$@"; }
 pnpm() { _load_nvm && pnpm "$@"; }
 
 autoload -U add-zsh-hook
+
+# Auto-switch node version when entering a directory with .nvmrc
+_auto_nvm_use() {
+  if [[ -f .nvmrc ]]; then
+    _load_nvm
+    nvm use
+  fi
+}
+add-zsh-hook chpwd _auto_nvm_use
+# Run once for the initial directory
+_auto_nvm_use
 
 # --- Java & Maven ---
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
