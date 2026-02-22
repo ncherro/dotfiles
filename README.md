@@ -1,35 +1,78 @@
-## Prereqs
+# dotfiles
 
-1. `brew install fzf` [for fuzzy finding functionality](https://github.com/junegunn/fzf)
-1. `brew install ctags` to support gutentags
-1. `brew install ripgrep` to support Vim `:Find`
+Config for zsh, vim, tmux, and git. Works on macOS and Linux (Ubuntu).
 
-## Zsh
+## Structure
 
-Better than bash
+```
+zshrc                  # entry point — detects OS, sources platform + base
+zsh/
+  base.zsh             # cross-platform config (~90% of everything)
+  mac.zsh              # macOS-specific (Homebrew, NVM, Java, etc.)
+  linux.zsh            # Linux-specific (antidote, keychain, etc.)
+zsh_plugins.txt        # antidote plugin list (shared)
+zshrc.local.example    # template for machine-local overrides
+vimrc
+tmux.conf
+gitconfig
+```
 
-1. `brew install zsh`
-1. `brew install antigen`
-1. `ln -s /path/to/this/dir/zshrc ~/.zshrc`
-1. `source ~/.zshrc` (or open a new shell)
+Machine-specific or sensitive config (work credentials, internal tools, etc.) goes in `~/.zshrc.local`, which is sourced automatically but never committed. See `zshrc.local.example` for a template.
 
-## Vim
+## Setup
 
-1. `ln -s /path/to/this/dir/vimrc ~/.vimrc`
-1. launch `vim` (aliased to `v` in .zshrc) and run `:PluginInstall`
+Clone the repo:
+
+```sh
+git clone https://github.com/ncherro/dotfiles ~/Projects/dotfiles
+```
+
+### Zsh
+
+**macOS:**
+```sh
+brew install antidote fzf ripgrep zsh-git-prompt zsh-completions
+ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
+```
+
+**Ubuntu:**
+```sh
+git clone --depth=1 https://github.com/mattmc3/antidote.git ~/.antidote
+sudo apt install fzf ripgrep keychain
+ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
+```
+
+Then open a new shell (or `source ~/.zshrc`).
+
+### Vim
+
+```sh
+# Install vim-plug
+curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
+  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+
+ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
+```
+
+Launch vim and run `:PlugInstall`.
+
+### Tmux
+
+**macOS:** `brew install tmux`
+**Ubuntu:** `sudo apt install tmux`
+
+```sh
+ln -s ~/Projects/dotfiles/tmux.conf ~/.tmux.conf
+```
+
+### Git
+
+```sh
+cp ~/Projects/dotfiles/gitconfig ~/.gitconfig
+```
+
+Edit `~/.gitconfig` to set your name, email, and any local overrides.
 
 ## Color schemes
 
-Hybrid - https://github.com/chadmayfield/hybrid-terminal-theme
-
-Rose Pine - https://github.com/rose-pine/terminal.app
-
-## Tmux
-
-1. `brew install tmux`
-1. `ln -s /path/to/this/dir/tmux.conf ~/.tmux.conf`
-
-## Git config
-
-1. `cp /path/to/this/dir/gitconfig ~/.gitconfig` and edit the file to override
-   your username, etc
+Using [One Dark](https://github.com/joshdick/onedark.vim) via terminal color preferences (no vim plugin needed).
