@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__codesearch__*",
+      "mcp__drive__*",
+      "mcp__aika__*",
+      "mcp__ghe__*",
+      "Bash(awk:*)",
+      "Bash(bazel:*)",
+      "Bash(bq:*)",
+      "Bash(cat:*)",
+      "Bash(docker:*)",
+      "Bash(java:*)",
+      "Bash(javap:*)",
+      "Bash(mvn:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(npm:*)",
+      "Bash(yarn:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(pbcopy:*)",
+      "Bash(tsc:*)",
+      "Bash(xargs:*)"
+    ],
+    "deny": [
+      "Read(node_modules/**)",
+      "Read(build/**)",
+      "Read(dist/**)",
+      "Read(.env*)"
+    ]
+  }
+}
