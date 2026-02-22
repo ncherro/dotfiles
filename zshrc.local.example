@@ -1,0 +1,30 @@
+# ~/.zshrc.local — machine-specific overrides, not committed to the repo
+# Copy this file to ~/.zshrc.local and fill in your values.
+
+# Work git identity
+alias gitwork="git config user.email \"you@yourcompany.com\""
+
+# Work-specific git aliases (e.g. using an internal CLI tool)
+# alias gfl='internal-cli git:fetch-local && ...'
+
+# Jira integration
+# jira() {
+#   local branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+#   local key=$(echo "$branch" | grep -oE '[A-Z]{2,}-[0-9]+' | head -1)
+#   [[ -n "$key" ]] && open "https://yourcompany.atlassian.net/browse/$key" || echo "No Jira key in branch: $branch"
+# }
+
+# Cloud / infra
+# alias k8s-prod-clusters="gcloud container clusters list --project=your-project ..."
+# alias k8s-sync="kubectl your-internal-plugin sync-creds"
+# ecr-login() { aws ecr get-login-password | docker login --username AWS --password-stdin your-account-id.dkr.ecr.your-region.amazonaws.com; }
+
+# Work-specific env vars
+# export MY_SERVICE_ID="your-service-id"
+
+# Work-specific PATH entries
+# export PATH="/opt/internal-tools/bin:$PATH"
+
+# Secrets / local config
+# source ~/.work.config
+# source ~/.env

@@ -1,3 +1,4 @@
 /env
-/config/nvim
 .claude
+zsh_plugins.zsh
+.zshrc.local
