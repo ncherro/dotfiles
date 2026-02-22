@@ -41,8 +41,8 @@ _auto_nvm_use
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
 
 # --- Google Cloud SDK ---
-source "$HOMEBREW_PREFIX/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
-source "$HOMEBREW_PREFIX/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc"
+[[ -f "$HOMEBREW_PREFIX/share/google-cloud-sdk/path.zsh.inc" ]] && source "$HOMEBREW_PREFIX/share/google-cloud-sdk/path.zsh.inc"
+[[ -f "$HOMEBREW_PREFIX/share/google-cloud-sdk/completion.zsh.inc" ]] && source "$HOMEBREW_PREFIX/share/google-cloud-sdk/completion.zsh.inc"
 
 # --- Postgres ---
 export PGDATA=/usr/local/var/postgres
@@ -57,12 +57,8 @@ alias nginx-reload="sudo /usr/local/bin/nginx -s reload"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 nginx-restart() { nginx-stop; nginx-start; }
 
-# --- GitHub ---
-alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/\.git//' | xargs open"
-
-ghpr() {
-  gh pr view --web 2>/dev/null || echo "No PR found for branch: $(git rev-parse --abbrev-ref HEAD)"
-}
+# --- Browser opener ---
+_open() { open "$@"; }
 
 # --- Misc ---
 export NODE_PATH=/usr/local/lib/node_modules
@@ -71,7 +67,4 @@ export LSCOLORS=ExFxBxDxCxegedabagacad
 alias terminal="open -a Kitty"
 
 # --- PATH ---
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/local/share/npm/bin:/opt/homebrew/opt/mysql-client/bin:/opt/homebrew/opt/mysql-client@8.4/bin:$HOME/.local/bin:$PATH"
-export PATH="/Applications/IntelliJ IDEA.app/Contents/MacOS:$PATH"
-export PATH="$HOME/scripts:$PATH"
-export PATH="$PATH:$HOME/.rvm/bin"
+export PATH="$HOME/scripts:/Applications/IntelliJ IDEA.app/Contents/MacOS:/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/local/share/npm/bin:/opt/homebrew/opt/mysql-client/bin:/opt/homebrew/opt/mysql-client@8.4/bin:$HOME/.local/bin:$PATH"
