@@ -15,6 +15,9 @@ export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export TZ=America/Chicago
 
+# ssh-agent
+eval "$(keychain --eval --quiet ~/.ssh/id_ed25519)"
+
 # git
 export GIT_MERGE_AUTOEDIT=no
 alias g-='gco -'
@@ -127,3 +130,4 @@ export WORKSPACE="$HOME/workspace"
 alias ws="cd $WORKSPACE";
 
 export LD_LIBRARY_PATH=/home/ebenezer/workspace/vid.stab:$LD_LIBRARY_PATH
+export PATH="$HOME/.local/bin:$PATH"
