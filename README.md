@@ -1,4 +1,4 @@
-# dotfiles
+# dotfiles 🏠
 
 Config for zsh, vim, tmux, and git. Works on macOS and Linux (Ubuntu).
 
