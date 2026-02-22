@@ -101,6 +101,50 @@ function exportFile() {
 
 alias focus="sudo bash ~/block-sites.sh"
 alias unfocus="sudo bash ~/unblock-sites.sh"
+alias mux="tmuxinator"
+alias bazel=bazelisk
+
+# --- Maven ---
+alias mcl='mvn clean'
+alias mve='mvn verify'
+alias mcv='mvn clean verify'
+alias mcut='mvn clean verify -DskipITs'
+alias mcit='mvn clean verify -Dsurefire.skip=true'
+alias mci='mvn clean install'
+alias mcg='mvn clean generate-sources'
+alias mcp='mvn clean package -P uberJar'
+alias mvn-clear-cache="rm -Rf ~/.m2/repository"
+alias openapi-generator-cli='java -jar ~/openapi-generator-cli.jar'
+
+# --- SDKMAN ---
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# --- Kubernetes ---
+alias k8s="kubectl"
+alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
+alias k8s-bash='k8s exec -it $(k8s get po | grep Running | awk "{print $1}" | tail -n 1) -- bash'
+
+# --- pyenv ---
+export PATH="$HOME/.pyenv/shims:${PATH}"
+export PYENV_SHELL=zsh
+if command -v pyenv >/dev/null; then
+  completions_dir="$(pyenv root)/completions/pyenv.zsh"
+  [ -f "$completions_dir" ] && source "$completions_dir"
+fi
+command pyenv rehash 2>/dev/null
+pyenv() {
+  local command=${1:-}
+  [ "$#" -gt 0 ] && shift
+  case "$command" in
+  rehash|shell)
+    eval "$(pyenv "sh-$command" "$@")"
+    ;;
+  *)
+    command pyenv "$command" "$@"
+    ;;
+  esac
+}
 
 # --- Prompt ---
 autoload -Uz promptinit; promptinit
