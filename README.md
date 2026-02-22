@@ -31,20 +31,24 @@ git clone https://github.com/ncherro/dotfiles ~/Projects/dotfiles
 
 **macOS:**
 ```sh
-brew install antidote fzf ripgrep zsh-git-prompt zsh-completions
+brew install antidote fzf ripgrep zsh-git-prompt zsh-completions nvm gh
 ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
 ```
 
 **Ubuntu:**
 ```sh
 git clone --depth=1 https://github.com/mattmc3/antidote.git ~/.antidote
-sudo apt install fzf ripgrep keychain
+sudo apt install fzf ripgrep keychain gh
 ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
 ```
+
+**Ubuntu (WSL only):** `sudo apt install wslu` — needed for `ghopen`/`ghpr` to open URLs in the Windows browser.
 
 Then open a new shell (or `source ~/.zshrc`).
 
 ### Vim
+
+**Ubuntu:** `sudo apt install vim xclip`
 
 ```sh
 # Install vim-plug
@@ -75,4 +79,4 @@ Edit `~/.gitconfig` to set your name, email, and any local overrides.
 
 ## Color schemes
 
-Using [One Dark](https://github.com/joshdick/onedark.vim) via terminal color preferences (no vim plugin needed).
+Using [One Dark](https://github.com/joshdick/onedark.vim) via terminal / kitty color preferences
