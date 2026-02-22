@@ -1,6 +1,9 @@
 export HOMEBREW_PREFIX="${HOMEBREW_PREFIX:-/opt/homebrew}"
 export SHELL=/opt/homebrew/bin/zsh
 
+# stub pmodload - prezto modules are loaded explicitly via antidote
+function pmodload { }
+
 # --- Antidote ---
 source $HOMEBREW_PREFIX/opt/antidote/share/antidote/antidote.zsh
 antidote load $DOTFILES/zsh_plugins.txt
