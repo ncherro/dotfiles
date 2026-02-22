@@ -37,22 +37,8 @@ _auto_nvm_use() { [[ -f .nvmrc ]] && _load_nvm && nvm use; }
 add-zsh-hook chpwd _auto_nvm_use
 _auto_nvm_use
 
-# --- Java & Maven ---
+# --- Java ---
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
-alias mcl='mvn clean'
-alias mve='mvn verify'
-alias mcv='mvn clean verify'
-alias mcut='mvn clean verify -DskipITs'
-alias mcit='mvn clean verify -Dsurefire.skip=true'
-alias mci='mvn clean install'
-alias mcg='mvn clean generate-sources'
-alias mcp='mvn clean package -P uberJar'
-alias mvn-clear-cache="rm -Rf ~/.m2/repository"
-alias openapi-generator-cli='java -jar ~/openapi-generator-cli.jar'
-
-# --- SDKMAN ---
-export SDKMAN_DIR="$HOME/.sdkman"
-[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
 
 # --- Google Cloud SDK ---
 source "$HOMEBREW_PREFIX/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc"
@@ -71,11 +57,6 @@ alias nginx-reload="sudo /usr/local/bin/nginx -s reload"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 nginx-restart() { nginx-stop; nginx-start; }
 
-# --- Kubernetes ---
-alias k8s="kubectl"
-alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
-alias k8s-bash='k8s exec -it $(k8s get po | grep Running | awk "{print $1}" | tail -n 1) -- bash'
-
 # --- GitHub ---
 alias ghopen="git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/\.git//' | xargs open"
 
@@ -87,30 +68,7 @@ ghpr() {
 export NODE_PATH=/usr/local/lib/node_modules
 export LSCOLORS=ExFxBxDxCxegedabagacad
 
-alias mux="tmuxinator"
-alias bazel=bazelisk
 alias terminal="open -a Kitty"
-
-# --- pyenv ---
-export PATH="$HOME/.pyenv/shims:${PATH}"
-export PYENV_SHELL=zsh
-if command -v pyenv >/dev/null; then
-  completions_dir="$(pyenv root)/completions/pyenv.zsh"
-  [ -f "$completions_dir" ] && source "$completions_dir"
-fi
-command pyenv rehash 2>/dev/null
-pyenv() {
-  local command=${1:-}
-  [ "$#" -gt 0 ] && shift
-  case "$command" in
-  rehash|shell)
-    eval "$(pyenv "sh-$command" "$@")"
-    ;;
-  *)
-    command pyenv "$command" "$@"
-    ;;
-  esac
-}
 
 # --- PATH ---
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/local/share/npm/bin:/opt/homebrew/opt/mysql-client/bin:/opt/homebrew/opt/mysql-client@8.4/bin:$HOME/.local/bin:$PATH"
