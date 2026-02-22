@@ -43,6 +43,17 @@ deletemerged() {
 
 alias gitpersonal="git config user.email \"ncherro@gmail.com\""
 
+# --- GitHub ---
+ghopen() {
+  local url
+  url=$(git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/\.git//')
+  _open "$url"
+}
+
+ghpr() {
+  gh pr view --web 2>/dev/null || echo "No PR found for branch: $(git rev-parse --abbrev-ref HEAD)"
+}
+
 # --- Tmux ---
 tls() {
   tmux ls -F '#{session_name}' 2>/dev/null | while read -r session; do
@@ -87,7 +98,7 @@ alias h="history"
 alias dco=docker-compose
 alias dc=docker-compose
 alias c=claude
-alias ngrok="~/ngrok"
+
 
 ulimit -n 10000
 export CLICOLOR=1

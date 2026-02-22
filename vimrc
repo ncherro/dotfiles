@@ -164,24 +164,6 @@ function! RenameFile()
     endif
 endfunction
 
-function! CucumberFindUnusedSteps()
-  let olderrorformat = &l:errorformat
-  try
-    set errorformat=%m#\ %f:%l
-    cexpr system('bundle exec cucumber --no-profile --no-color --format usage --dry-run features | grep "NOT MATCHED BY ANY STEPS" -B1 | egrep -v "(--|NOT MATCHED BY ANY STEPS)"')
-    cwindow
-  finally
-    let &l:errorformat = olderrorformat
-  endtry
-endfunction
-
-function! RSpecFile()
-  execute "Dispatch docker-compose exec app rspec " . expand("%p")
-endfunction
-
-function! RSpecCurrent()
-  execute "Dispatch docker-compose exec app rspec " . expand("%p") . ":" . line(".")
-endfunction
 
 function! LightLineFilename()
   return expand('%')
@@ -293,12 +275,6 @@ map <silent> <F7> mzgg=G'z :delmarks z<CR>:echo "Reformatted."<CR>
 " Instant markdown
 let g:instant_markdown_autostart = 0
 
-" Deoplete
-let g:deoplete#enable_at_startup = 1
-if executable('python3')
-  let g:python3_host_prog = exepath('python3')
-endif
-
 " Open files in current file's directory
 cnoremap %% <C-R>=expand('%:h').'/'<cr>
 map <leader>v :view %%
@@ -323,9 +299,6 @@ if exists(':NERDTree')
   autocmd VimEnter * wincmd p
   autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | call feedkeys(":quit\<CR>:\<BS>") | endif
 endif
-
-" Run cucumber wip
-silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
 
 " Remove trailing whitespace on save
 autocmd FileType c,cpp,python,ruby,java,javascript autocmd BufWritePre <buffer> :%s/\s\+$//e

@@ -17,7 +17,7 @@
 [github]
   user = ncherro
 [core]
-  excludesfile = /Users/nickherro/.gitignore
+  excludesfile = ~/.gitignore
 	autocrlf = input
 [url "git@github.com:"]
 	insteadOf = https://github.com/
