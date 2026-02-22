@@ -23,6 +23,7 @@ alias gti="git"
 alias g-='gco -'
 
 # git checkout with auto-prefix for new branches
+unalias gco 2>/dev/null
 gco() {
   if [[ "$1" == "-b" && -n "$2" && "$2" != $USER/* ]]; then
     git checkout -b "$USER/$2" "${@:3}"
