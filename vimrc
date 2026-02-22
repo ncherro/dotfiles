@@ -6,13 +6,11 @@ call plug#begin()
 " Navigation
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
-Plug '/opt/homebrew/opt/fzf'
 Plug 'preservim/nerdtree'
 Plug 'vim-scripts/IndexedSearch'
 Plug 'vim-scripts/matchit.zip'
 Plug 'tpope/vim-unimpaired'
 Plug 'jeetsukumaran/vim-buffergator'
-Plug 'ludovicchabant/vim-gutentags'
 
 " Syntax and Language Support
 Plug 'pangloss/vim-javascript'
@@ -60,8 +58,9 @@ Plug 'janko-m/vim-test'
 " Async linting
 Plug 'w0rp/ale'
 
+
 " Color
-Plug 'w0ng/vim-hybrid'
+Plug 'joshdick/onedark.vim'
 
 " Debugging
 Plug 'puremourning/vimspector'
@@ -77,8 +76,6 @@ call plug#end()
 syntax enable
 filetype plugin indent on
 
-" Gutentags: store tags per-repo in ~/.cache/tags/{name}
-let g:gutentags_cache_dir = expand('~/.cache/tags/{name}')
 
 " Editor UI
 set colorcolumn=80
@@ -125,7 +122,7 @@ set nowritebackup
 
 " Miscellaneous
 set history=1000
-set list listchars=tab:\ \ ,trail:·
+set list listchars=tab:\ \ ,trail:.
 set mouse-=a
 set mousehide
 set novisualbell
@@ -137,7 +134,7 @@ set timeoutlen=500
 
 " Colorscheme
 set background=dark
-colorscheme hybrid
+colorscheme onedark
 let g:disable_float_bg = 1
 
 " Hide the tildes at the end of the buffer
@@ -237,7 +234,11 @@ nnoremap <silent> vv <C-w>v
 nnoremap <silent> ss <C-w>s
 
 " Paste from clipboard
-nnoremap <silent> pp :read !pbpaste<CR>
+if has('mac')
+  nnoremap <silent> pp :read !pbpaste<CR>
+else
+  nnoremap <silent> pp :read !xclip -o<CR>
+endif
 
 " Clear search highlight
 nmap <silent> // :nohlsearch<CR>
@@ -264,7 +265,7 @@ nnoremap <C-h> <C-w>h
 nnoremap <C-l> <C-w>l
 
 " Vimspector debugging
-let g:vimspector_base_dir='/Users/nicholash/.vim/plugged/vimspector'
+let g:vimspector_base_dir=expand('~/.vim/plugged/vimspector')
 nnoremap <Leader>dd :call vimspector#Launch()<CR>
 nnoremap <Leader>de :call vimspector#Reset()<CR>
 nnoremap <Leader>dc :call vimspector#Continue()<CR>
@@ -294,8 +295,9 @@ let g:instant_markdown_autostart = 0
 
 " Deoplete
 let g:deoplete#enable_at_startup = 1
-let g:python_host_prog = "/usr/local/bin/python2"
-let g:python3_host_prog = "/usr/local/bin/python3"
+if executable('python3')
+  let g:python3_host_prog = exepath('python3')
+endif
 
 " Open files in current file's directory
 cnoremap %% <C-R>=expand('%:h').'/'<cr>
@@ -307,8 +309,7 @@ map <leader>e :!%:p<cr>
 " Rename current file
 map <leader>n :call RenameFile()<cr>
 
-" Auto open NERDTree
-au VimEnter * NERDTree
+" NERDTree
 map \ :NERDTreeToggle<CR>
 map \| :NERDTreeFind<CR>
 let NERDTreeShowHidden=1
@@ -316,8 +317,12 @@ let NERDTreeIgnore = ['\.pyc$', '^node_modules', '\.log$', 'public\/system',
       \ 'javascripts\/bundle', '^spec\/dummy', '^bower_components', '\.git',
       \ '\.DS_Store', '\.vscode', '__pycache__', '^tags', '^tags.lock$',
       \ '^tags.temp$', '^coverage', '^build\/', '__init__.py']
-autocmd VimEnter * wincmd p
-autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | call feedkeys(":quit\<CR>:\<BS>") | endif
+" Only auto-open NERDTree if the plugin is installed
+if exists(':NERDTree')
+  au VimEnter * NERDTree
+  autocmd VimEnter * wincmd p
+  autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | call feedkeys(":quit\<CR>:\<BS>") | endif
+endif
 
 " Run cucumber wip
 silent! map <unique> <Leader>w :!bundle exec cucumber --profile=wip<CR>
@@ -354,7 +359,7 @@ autocmd BufNewFile,BufRead *.conf set syntax=config
 
 " Lightline config
 let g:lightline = {
-\ 'colorscheme': 'rosepine',
+\ 'colorscheme': 'onedark',
 \ 'active': {
 \   'left': [['mode', 'paste'], ['filename', 'modified']],
 \   'right': [['lineinfo'], ['percent'], ['readonly', 'linter_warnings', 'linter_errors', 'linter_ok']]
