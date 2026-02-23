@@ -133,12 +133,19 @@ set synmaxcol=0
 set timeoutlen=500
 
 " Colorscheme
+set termguicolors
 set background=dark
 colorscheme onedark
 let g:disable_float_bg = 1
 
+" Transparent background — inherits terminal color so vim blends in seamlessly
+highlight Normal guibg=NONE ctermbg=NONE
+highlight NonText guibg=NONE ctermbg=NONE
+highlight LineNr guibg=NONE
+highlight SignColumn guibg=NONE
+
 " Hide the tildes at the end of the buffer
-highlight EndOfBuffer ctermfg=black ctermbg=black
+highlight EndOfBuffer ctermfg=black guifg=black ctermbg=NONE guibg=NONE
 
 " Terminal mouse support for non-Neovim
 if !has('nvim')
