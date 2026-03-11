@@ -38,7 +38,9 @@ add-zsh-hook chpwd _auto_nvm_use
 _auto_nvm_use
 
 # --- Java ---
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+if /usr/libexec/java_home -v 21 &>/dev/null; then
+  export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+fi
 
 # --- Google Cloud SDK ---
 [[ -f "$HOMEBREW_PREFIX/share/google-cloud-sdk/path.zsh.inc" ]] && source "$HOMEBREW_PREFIX/share/google-cloud-sdk/path.zsh.inc"
