@@ -26,14 +26,26 @@ claude/settings.json   # symlinked to ~/.claude/settings.json
 - **zsh**: `source ~/.zshrc`
 - **vim**: `:source ~/.vimrc`
 
-## Symlink setup
+## Setup on a new machine
+
+### Symlinks
 
 ```sh
 ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
 ln -s ~/Projects/dotfiles/tmux.conf ~/.tmux.conf
 ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
+mkdir -p ~/.config/kitty
 ln -s ~/Projects/dotfiles/kitty.conf ~/.config/kitty/kitty.conf
+mkdir -p ~/.claude
 ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
+```
+
+### Zsh plugins
+
+`zsh_plugins.zsh` (the antidote static cache) is gitignored and must be generated after cloning. Open a new shell — antidote will clone missing plugins and build the cache on first run. If plugins don't load, delete the stale cache and reopen:
+
+```sh
+rm -f ~/Projects/dotfiles/zsh_plugins.zsh
 ```
 
 ## Cross-platform notes
