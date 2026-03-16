@@ -22,6 +22,42 @@ alias gsha="git rev-parse --short HEAD"
 alias gti="git"
 alias g-='gco -'
 
+# git worktree in ~/worktrees
+gwt() {
+  if [[ "$PWD" == *"/worktrees/"* ]]; then
+    echo "Already in a worktree"
+    return 1
+  fi
+  local root=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
+  if [[ -z "$root" ]]; then
+    echo "Not in a git repository"
+    return 1
+  fi
+  local branch
+  if [[ -n "$1" ]]; then
+    branch="$1"
+    local dest="$HOME/worktrees/${root}--${branch//\//-}"
+    git worktree add -b "$branch" "$dest" master && cd "$dest"
+  else
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [[ "$branch" == "master" || "$branch" == "main" ]]; then
+      echo "On $branch — pass a branch name to create a new worktree"
+      return 1
+    fi
+    local dest="$HOME/worktrees/${root}--${branch//\//-}"
+    if [[ -d "$dest" ]]; then
+      cd "$dest"
+      return
+    fi
+    if [[ -n "$(git status --porcelain)" ]]; then
+      echo "Working tree is not clean — commit or stash changes first"
+      return 1
+    fi
+    git checkout master 2>/dev/null || git checkout main && \
+      git worktree add "$dest" "$branch" && cd "$dest"
+  fi
+}
+
 # git checkout with auto-prefix for new branches
 unalias gco 2>/dev/null
 gco() {
@@ -97,8 +133,18 @@ alias v="vim"
 alias h="history"
 alias dco=docker-compose
 alias dc=docker-compose
+ 
+# Start claude and auto-resume session by current branch
+claudeb() {
+  local branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  if [ -n "$branch" ]; then
+    claude --resume "$branch" "$@"
+  else
+    claude "$@"
+  fi
+}
 alias c=claude
-
+alias cb=claudeb
 
 ulimit -n 10000
 export CLICOLOR=1

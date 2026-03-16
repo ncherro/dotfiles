@@ -7,8 +7,6 @@ esac
 
 source $DOTFILES/zsh/base.zsh
 
-# Work devex tooling (auto-managed by path_updater_lib.sh — do not remove)
-export PATH=/opt/work-devex/bin:$PATH
-
 # Machine-local overrides (gitignored)
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+export PATH=/opt/work-devex/bin:$PATH
