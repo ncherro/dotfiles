@@ -102,7 +102,16 @@ tls() {
   done
 }
 
-tatt() { tmux at -t $1; }
+tatt() {
+  local match
+  match=$(tmux ls -F '#{session_name}' 2>/dev/null | grep -F "$1" | head -1)
+  if [ -n "$match" ]; then
+    tmux at -t "$match"
+  else
+    echo "No session matching '$1'"
+    return 1
+  fi
+}
 
 tat() {
   dirname=${PWD##*/}
