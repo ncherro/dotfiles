@@ -218,8 +218,14 @@ prompt pure
 
 # --- Workspace / Worktrees ---
 export WORKSPACE="$HOME/workspace"
-alias ws="cd $WORKSPACE"
-alias wt="cd $HOME/worktrees"
+
+ws() { cd "$WORKSPACE/${1:-.}" }
+wt() { cd "$HOME/worktrees/${1:-.}" }
+
+_ws() { _path_files -W "$WORKSPACE" -/ }
+_wt() { _path_files -W "$HOME/worktrees" -/ }
+compdef _ws ws
+compdef _wt wt
 
 # branch completion (requires compinit to have been called by platform file or plugins)
 (( $+functions[compdef] )) && compdef _git_branch_complete gco gs
