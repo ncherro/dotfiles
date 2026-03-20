@@ -37,7 +37,7 @@ gwt() {
   if [[ -n "$1" ]]; then
     branch="$1"
     local dest="$HOME/worktrees/${root}--${branch//\//-}"
-    git worktree add -b "$branch" "$dest" master && cd "$dest"
+    git worktree add -b "$branch" "$dest" master && cd "$dest" && tat
   else
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [[ "$branch" == "master" || "$branch" == "main" ]]; then
@@ -46,7 +46,7 @@ gwt() {
     fi
     local dest="$HOME/worktrees/${root}--${branch//\//-}"
     if [[ -d "$dest" ]]; then
-      cd "$dest"
+      cd "$dest" && tat
       return
     fi
     if [[ -n "$(git status --porcelain)" ]]; then
@@ -54,7 +54,7 @@ gwt() {
       return 1
     fi
     git checkout master 2>/dev/null || git checkout main && \
-      git worktree add "$dest" "$branch" && cd "$dest"
+      git worktree add "$dest" "$branch" && cd "$dest" && tat
   fi
 }
 
