@@ -115,13 +115,14 @@ tatt() {
 
 tat() {
   local session_name
-  # In a git repo, use branch name (or repo name if on master)
+  # In a git repo, use dirname--branch (or just dirname on main/master)
   if git rev-parse --is-inside-work-tree &>/dev/null; then
     local branch=$(git rev-parse --abbrev-ref HEAD)
+    local dirname=$(basename "$(git rev-parse --show-toplevel)")
     if [[ "$branch" == "master" || "$branch" == "main" ]]; then
-      session_name=$(basename "$(git rev-parse --show-toplevel)")
+      session_name=$dirname
     else
-      session_name=$branch
+      session_name="${dirname}--${branch}"
     fi
   else
     session_name=${PWD##*/}
