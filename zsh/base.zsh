@@ -114,16 +114,29 @@ tatt() {
 }
 
 tat() {
-  dirname=${PWD##*/}
-  if tmux ls 2>/dev/null | grep -q "^${dirname}:"; then
-    tmux at -t "$dirname"
+  local session_name
+  # In a git repo, use branch name (or repo name if on master)
+  if git rev-parse --is-inside-work-tree &>/dev/null; then
+    local branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$branch" == "master" || "$branch" == "main" ]]; then
+      session_name=$(basename "$(git rev-parse --show-toplevel)")
+    else
+      session_name=$branch
+    fi
+  else
+    session_name=${PWD##*/}
+  fi
+  # tmux doesn't allow dots in session names
+  session_name=${session_name//./-}
+  if tmux ls 2>/dev/null | grep -q "^${session_name}:"; then
+    tmux at -t "$session_name"
     return 0
   fi
-  if command -v tmuxinator &>/dev/null && tmuxinator ls 2>/dev/null | grep -q "^${dirname}"; then
-    tmuxinator start "$dirname"
+  if command -v tmuxinator &>/dev/null && tmuxinator ls 2>/dev/null | grep -q "^${session_name}"; then
+    tmuxinator start "$session_name"
     return 0
   fi
-  tmux new -s "$dirname"
+  tmux new -s "$session_name"
 }
 
 tks() { tmux kill-server; }
