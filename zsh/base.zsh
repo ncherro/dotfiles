@@ -169,28 +169,13 @@ alias h="history"
 alias dco=docker-compose
 alias dc=docker-compose
  
-# Start claude and auto-resume session by current branch
-claudeb() {
-  local branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-  if [ -n "$branch" ]; then
-    claude --resume "$branch" "$@"
-  else
-    claude "$@"
-  fi
-}
 alias c=claude
-alias cb=claudeb
 
 ulimit -n 10000
 export CLICOLOR=1
 
 setopt inc_append_history
 setopt share_history
-
-# Source a file and export all its variables
-function exportFile() {
-  set -o allexport; source $1; set +o allexport;
-}
 
 alias focus="sudo bash ~/block-sites.sh"
 alias unfocus="sudo bash ~/unblock-sites.sh"
