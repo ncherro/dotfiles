@@ -73,6 +73,7 @@ _git_branch_complete() {
   compadd ${(f)"$(git branch -a 2>/dev/null | sed 's/^[* ]*//' | sed 's|remotes/origin/||' | sort -u)"}
 }
 
+# Delete branches already merged into current branch
 deletemerged() {
   git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
 }
@@ -93,6 +94,7 @@ ghp() {
 }
 
 # --- Tmux ---
+# List tmux sessions, highlighting ones running processes
 tls() {
   tmux ls -F '#{session_name}' 2>/dev/null | while read -r session; do
     procs=$(tmux list-windows -t "$session" -F '#{pane_current_command}' | grep -v '^zsh$' | tr '\n' ' ')
@@ -104,6 +106,7 @@ tls() {
   done
 }
 
+# Attach to a tmux session by fuzzy name match
 tatt() {
   local match
   match=$(tmux ls -F '#{session_name}' 2>/dev/null | grep -F "$1" | head -1)
@@ -115,6 +118,7 @@ tatt() {
   fi
 }
 
+# Attach or create a tmux session named after the repo/branch
 tat() {
   # Optionally cd into a directory first
   if [[ -n "$1" ]]; then
@@ -146,6 +150,7 @@ tat() {
   tmux new -s "$session_name"
 }
 
+# Kill all tmux sessions
 tks() { tmux kill-server; }
 
 # --- FZF ---
@@ -153,6 +158,7 @@ tks() { tmux kill-server; }
 export FZF_DEFAULT_COMMAND='rg --files --hidden --follow --glob "!.git/*"'
 
 # --- Misc ---
+# cd to the git repo root
 cd.() { cd "$(git rev-parse --show-toplevel)"; }
 
 alias l="ls -alh"
@@ -181,6 +187,7 @@ export CLICOLOR=1
 setopt inc_append_history
 setopt share_history
 
+# Source a file and export all its variables
 function exportFile() {
   set -o allexport; source $1; set +o allexport;
 }
@@ -239,7 +246,9 @@ prompt pure
 # --- Workspace / Worktrees ---
 export WORKSPACE="$HOME/workspace"
 
+# cd into ~/workspace
 ws() { cd "$WORKSPACE/${1:-.}" }
+# cd into ~/worktrees
 wt() { cd "$HOME/worktrees/${1:-.}" }
 
 _ws() { _path_files -W "$WORKSPACE" -/ }
