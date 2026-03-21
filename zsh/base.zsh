@@ -73,11 +73,6 @@ _git_branch_complete() {
   compadd ${(f)"$(git branch -a 2>/dev/null | sed 's/^[* ]*//' | sed 's|remotes/origin/||' | sort -u)"}
 }
 
-# Delete branches already merged into current branch
-deletemerged() {
-  git branch --merged | grep -v "\*" | xargs -n 1 git branch -d
-}
-
 alias gitpersonal="git config user.email \"ncherro@gmail.com\""
 
 # --- GitHub ---
