@@ -1,6 +1,6 @@
 # dotfiles
 
-Personal config for zsh, vim, tmux, kitty, and git. Targets macOS and Linux (Ubuntu/WSL2).
+Config for zsh, vim, tmux, and git. Optimized for jumping between projects and branches, using Claude Code and Vim. Works on macOS and Linux (Ubuntu).
 
 ## Structure
 
