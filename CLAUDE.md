@@ -48,7 +48,7 @@ ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
 rm -f ~/Projects/dotfiles/zsh_plugins.zsh
 ```
 
-## Guiding principles
+## Conventions
 
 - Cross-platform: keep base.zsh universal, platform-specific code in mac.zsh/linux.zsh
 - Git-centric: sessions, branches, and navigation derive from git context
