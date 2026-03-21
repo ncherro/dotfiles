@@ -16,17 +16,19 @@ Config for zsh, vim, tmux, and git. Works on macOS and Linux (Ubuntu).
 ```
 zshrc                  # entry point — detects OS, sources platform + base
 zsh/
-  base.zsh             # cross-platform config (~90% of everything)
-  mac.zsh              # macOS-specific (Homebrew, NVM, Java, etc.)
+  base.zsh             # cross-platform config (aliases, functions, prompt, tools)
+  mac.zsh              # macOS-specific (Homebrew, NVM, etc.)
   linux.zsh            # Linux-specific (antidote, keychain, etc.)
-zsh_plugins.txt        # antidote plugin list (shared)
+zsh_plugins.txt        # antidote plugin list
 zshrc.local.example    # template for machine-local overrides
-vimrc
 tmux.conf
+vimrc
+kitty.conf
 gitconfig
+claude/settings.json   # symlinked to ~/.claude/settings.json
 ```
 
-Machine-specific or sensitive config (work credentials, internal tools, etc.) goes in `~/.zshrc.local`, which is sourced automatically but never committed. See `zshrc.local.example` for a template.
+`~/.zshrc.local` is sourced automatically but never committed — use it for machine-local or sensitive config. See `zshrc.local.example` for a template.
 
 ## Setup
 
@@ -44,11 +46,15 @@ brew install antidote fzf ripgrep zsh-git-prompt zsh-completions nvm gh tmux
 # Symlink configs
 ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
 ln -s ~/Projects/dotfiles/tmux.conf ~/.tmux.conf
+ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
+mkdir -p ~/.config/kitty
+ln -s ~/Projects/dotfiles/kitty.conf ~/.config/kitty/kitty.conf
+mkdir -p ~/.claude
+ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
 
-# Vim
+# Vim plugins
 curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
   https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
 
 # Git
 cp ~/Projects/dotfiles/gitconfig ~/.gitconfig
@@ -67,11 +73,13 @@ sudo apt install zsh fzf ripgrep keychain gh tmux vim xclip
 # Symlink configs
 ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
 ln -s ~/Projects/dotfiles/tmux.conf ~/.tmux.conf
+ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
+mkdir -p ~/.claude
+ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
 
-# Vim
+# Vim plugins
 curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
   https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
 
 # Git
 cp ~/Projects/dotfiles/gitconfig ~/.gitconfig
