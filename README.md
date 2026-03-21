@@ -2,7 +2,7 @@
 
 Config for zsh, vim, tmux, and git. Works on macOS and Linux (Ubuntu).
 
-## Guiding principles
+## Conventions
 
 - Cross-platform: keep base.zsh universal, platform-specific code in mac.zsh/linux.zsh
 - Git-centric: sessions, branches, and navigation derive from git context
