@@ -114,6 +114,10 @@ tatt() {
 }
 
 tat() {
+  # Optionally cd into a directory first
+  if [[ -n "$1" ]]; then
+    cd "$1" || return 1
+  fi
   local session_name
   # In a git repo, use dirname--branch (or just dirname on main/master)
   if git rev-parse --is-inside-work-tree &>/dev/null; then
@@ -240,6 +244,7 @@ _ws() { _path_files -W "$WORKSPACE" -/ }
 _wt() { _path_files -W "$HOME/worktrees" -/ }
 compdef _ws ws
 compdef _wt wt
+compdef _ws tat
 
 # branch completion (requires compinit to have been called by platform file or plugins)
 (( $+functions[compdef] )) && compdef _git_branch_complete gco gs
