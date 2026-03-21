@@ -32,9 +32,8 @@ claude/settings.json   # symlinked to ~/.claude/settings.json
 
 ## Setup
 
-Clone the repo:
-
 ```sh
+mkdir -p ~/Projects ~/workspace ~/worktrees
 git clone https://github.com/ncherro/dotfiles ~/Projects/dotfiles
 ```
 
