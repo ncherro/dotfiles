@@ -80,13 +80,13 @@ deletemerged() {
 alias gitpersonal="git config user.email \"ncherro@gmail.com\""
 
 # --- GitHub ---
-ghopen() {
+ghr() {
   local url
   url=$(git config --get remote.origin.url | sed 's/:/\//' | sed 's/git@/https:\/\//' | sed 's/\.git//')
   _open "$url"
 }
 
-ghpr() {
+ghp() {
   gh pr view --web 2>/dev/null || echo "No PR found for branch: $(git rev-parse --abbrev-ref HEAD)"
 }
 
