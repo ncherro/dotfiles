@@ -2,6 +2,15 @@
 
 Config for zsh, vim, tmux, and git. Works on macOS and Linux (Ubuntu).
 
+## Guiding principles
+
+- Cross-platform: keep base.zsh universal, platform-specific code in mac.zsh/linux.zsh
+- Git-centric: sessions, branches, and navigation derive from git context
+- Short aliases, small composable functions that chain together
+- Minimal UI: transparent backgrounds, no chrome
+- Local overrides via .local files, never committed
+- Self-bootstrapping: new machine setup should just be symlinks
+
 ## Structure
 
 ```
