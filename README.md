@@ -87,8 +87,24 @@ cp ~/Projects/dotfiles/gitconfig ~/.gitconfig
 
 Open a new shell, launch vim and run `:PlugInstall`, then edit `~/.gitconfig` to set your name and email.
 
-**WSL only:** `sudo apt install wslu` — needed for `ghopen`/`ghpr` to open URLs in the Windows browser.
+**WSL only:** `sudo apt install wslu` — needed for `ghr`/`ghp` to open URLs in the Windows browser.
 
 ## Color schemes
 
 Using [One Dark](https://github.com/joshdick/onedark.vim) via terminal / kitty color preferences.
+
+## Functions
+
+| Function | Description |
+|----------|-------------|
+| `gwt` | Git worktree in ~/worktrees |
+| `gco` | Git checkout with auto-prefix for new branches |
+| `ghr` | Open the current repo in the browser |
+| `ghp` | Open the current branch's PR in the browser |
+| `tls` | List tmux sessions, highlighting ones running processes |
+| `tatt` | Attach to a tmux session by fuzzy name match |
+| `tat` | Attach or create a tmux session named after the repo/branch |
+| `tks` | Kill all tmux sessions |
+| `cd.` | cd to the git repo root |
+| `ws` | cd into ~/workspace |
+| `wt` | cd into ~/worktrees |
