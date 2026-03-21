@@ -1,6 +1,6 @@
 # dotfiles 🏠
 
-Config for zsh, vim, tmux, and git. Optimized for jumping between projects and branches in Claude Code and Vim. Works on macOS and Linux (Ubuntu).
+Config for zsh, vim, tmux, and git. Optimized for jumping between projects and branches, using Claude Code and Vim. Works on macOS and Linux (Ubuntu).
 
 ## Conventions
 
