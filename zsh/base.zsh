@@ -120,14 +120,16 @@ tat() {
     cd "$1" || return 1
   fi
   local session_name
-  # In a git repo, use dirname--branch (or just dirname on main/master)
+  # In a git repo, use dirname--branch for worktrees, just dirname otherwise
   if git rev-parse --is-inside-work-tree &>/dev/null; then
-    local branch=$(git rev-parse --abbrev-ref HEAD)
-    local dirname=$(basename "$(dirname "$(git rev-parse --git-common-dir)")")
-    if [[ "$branch" == "master" || "$branch" == "main" ]]; then
-      session_name=$dirname
-    else
+    local git_dir=$(cd "$(git rev-parse --git-dir)" && pwd)
+    local git_common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+    local dirname=$(basename "$(dirname "$git_common_dir")")
+    if [[ "$git_dir" != "$git_common_dir" ]]; then
+      local branch=$(git rev-parse --abbrev-ref HEAD)
       session_name="${dirname}--${branch}"
+    else
+      session_name=$dirname
     fi
   else
     session_name=${PWD##*/}
