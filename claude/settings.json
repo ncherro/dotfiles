@@ -23,6 +23,7 @@
       "Bash(find:*)",
       "Bash(ls:*)",
       "Bash(pbcopy:*)",
+      "Bash(pnpm:*)",
       "Bash(tsc:*)",
       "Bash(xargs:*)"
     ],
@@ -32,5 +33,6 @@
       "Read(dist/**)",
       "Read(.env*)"
     ]
-  }
+  },
+  "voiceEnabled": true
 }
