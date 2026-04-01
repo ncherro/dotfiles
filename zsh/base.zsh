@@ -120,14 +120,16 @@ tat() {
     cd "$1" || return 1
   fi
   local session_name
-  # In a git repo, use dirname--branch (or just dirname on main/master)
+  # In a git repo, use dirname--branch for worktrees, just dirname otherwise
   if git rev-parse --is-inside-work-tree &>/dev/null; then
-    local branch=$(git rev-parse --abbrev-ref HEAD)
-    local dirname=$(basename "$(dirname "$(git rev-parse --git-common-dir)")")
-    if [[ "$branch" == "master" || "$branch" == "main" ]]; then
-      session_name=$dirname
-    else
+    local git_dir=$(cd "$(git rev-parse --git-dir)" && pwd)
+    local git_common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+    local dirname=$(basename "$(dirname "$git_common_dir")")
+    if [[ "$git_dir" != "$git_common_dir" ]]; then
+      local branch=$(git rev-parse --abbrev-ref HEAD)
       session_name="${dirname}--${branch}"
+    else
+      session_name=$dirname
     fi
   else
     session_name=${PWD##*/}
@@ -165,6 +167,42 @@ alias dco=docker-compose
 alias dc=docker-compose
  
 alias c=claude
+
+# Review a GHE PR in a dedicated tmux session with Claude
+review-pr() {
+  local url="$1"
+  if [[ -z "$url" ]]; then
+    echo "Usage: review-pr <GHE-PR-URL>"
+    return 1
+  fi
+
+  local service pr_number
+  service=$(echo "$url" | sed -E 's|.*/([^/]+)/pull/.*|\1|')
+  pr_number=$(echo "$url" | sed -E 's|.*/pull/([0-9]+).*|\1|')
+
+  if [[ -z "$service" || -z "$pr_number" ]]; then
+    echo "Could not parse service and PR number from URL"
+    return 1
+  fi
+
+  local dirname="${service}-${pr_number}"
+  local dir=~/workspace/_notes/reviews/${dirname}
+  mkdir -p "$dir"
+
+  local session="review--${dirname}"
+
+  if ! tmux has-session -t "$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$dir"
+  fi
+
+  tmux send-keys -t "$session" "claude '/review-pr $url'" Enter
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "$session"
+  else
+    tmux attach-session -t "$session"
+  fi
+}
 
 ulimit -n 10000
 export CLICOLOR=1
