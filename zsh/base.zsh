@@ -168,6 +168,42 @@ alias dc=docker-compose
  
 alias c=claude
 
+# Review a GHE PR in a dedicated tmux session with Claude
+review-pr() {
+  local url="$1"
+  if [[ -z "$url" ]]; then
+    echo "Usage: review-pr <GHE-PR-URL>"
+    return 1
+  fi
+
+  local service pr_number
+  service=$(echo "$url" | sed -E 's|.*/([^/]+)/pull/.*|\1|')
+  pr_number=$(echo "$url" | sed -E 's|.*/pull/([0-9]+).*|\1|')
+
+  if [[ -z "$service" || -z "$pr_number" ]]; then
+    echo "Could not parse service and PR number from URL"
+    return 1
+  fi
+
+  local dirname="${service}-${pr_number}"
+  local dir=~/workspace/_notes/reviews/${dirname}
+  mkdir -p "$dir"
+
+  local session="review--${dirname}"
+
+  if ! tmux has-session -t "$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$dir"
+  fi
+
+  tmux send-keys -t "$session" "claude '/review-pr $url'" Enter
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "$session"
+  else
+    tmux attach-session -t "$session"
+  fi
+}
+
 ulimit -n 10000
 export CLICOLOR=1
 
