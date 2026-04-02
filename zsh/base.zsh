@@ -204,6 +204,30 @@ review-pr() {
   fi
 }
 
+# Open a notes directory in a dedicated tmux session
+notes() {
+  local dirname="$1"
+  if [[ -z "$dirname" ]]; then
+    echo "Usage: notes <dirname>"
+    return 1
+  fi
+
+  local dir=~/workspace/_notes/${dirname}
+  mkdir -p "$dir"
+
+  local session="notes--${dirname}"
+
+  if ! tmux has-session -t "$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$dir"
+  fi
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "$session"
+  else
+    tmux attach-session -t "$session"
+  fi
+}
+
 ulimit -n 10000
 export CLICOLOR=1
 
