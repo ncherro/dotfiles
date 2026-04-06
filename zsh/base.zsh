@@ -262,25 +262,27 @@ alias k8s-contexts="grep '^- name: ' ~/.kube/config | awk '{print $3}'"
 alias k8s-bash='k8s exec -it $(k8s get po | grep Running | awk "{print $1}" | tail -n 1) -- bash'
 
 # --- pyenv ---
-export PATH="$HOME/.pyenv/shims:${PATH}"
-export PYENV_SHELL=zsh
-if command -v pyenv >/dev/null; then
-  completions_dir="$(pyenv root)/completions/pyenv.zsh"
-  [ -f "$completions_dir" ] && source "$completions_dir"
+if [ -d "$HOME/.pyenv" ]; then
+  export PATH="$HOME/.pyenv/shims:${PATH}"
+  export PYENV_SHELL=zsh
+  if command -v pyenv >/dev/null; then
+    completions_dir="$(pyenv root)/completions/pyenv.zsh"
+    [ -f "$completions_dir" ] && source "$completions_dir"
+    command pyenv rehash 2>/dev/null
+  fi
+  pyenv() {
+    local command=${1:-}
+    [ "$#" -gt 0 ] && shift
+    case "$command" in
+    rehash|shell)
+      eval "$(pyenv "sh-$command" "$@")"
+      ;;
+    *)
+      command pyenv "$command" "$@"
+      ;;
+    esac
+  }
 fi
-command pyenv rehash 2>/dev/null
-pyenv() {
-  local command=${1:-}
-  [ "$#" -gt 0 ] && shift
-  case "$command" in
-  rehash|shell)
-    eval "$(pyenv "sh-$command" "$@")"
-    ;;
-  *)
-    command pyenv "$command" "$@"
-    ;;
-  esac
-}
 
 # --- Prompt ---
 autoload -Uz promptinit; promptinit
