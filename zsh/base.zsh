@@ -15,8 +15,6 @@ alias gd='git add -N . && git diff && git reset'
 _git_default_branch() {
   git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo master
 }
-gsq() { git reset --soft $(git merge-base $(_git_default_branch) HEAD); }
-gdm() { local b=$(_git_default_branch); git branch --merged | grep -v "^\*\\|$b" | xargs -n 1 git branch -d; }
 alias gs='git switch'
 alias gfr='git pull --rebase'
 alias gfa='git fetch --all'
