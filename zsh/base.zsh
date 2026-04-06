@@ -12,8 +12,11 @@ alias gp='git push'
 alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
 alias gd='git add -N . && git diff && git reset'
-alias gsq='git reset --soft $(git merge-base master HEAD)'
-alias gdm='git branch --merged | grep -v "^\*\\|master" | xargs -n 1 git branch -d'
+_git_default_branch() {
+  git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo master
+}
+gsq() { git reset --soft $(git merge-base $(_git_default_branch) HEAD); }
+gdm() { local b=$(_git_default_branch); git branch --merged | grep -v "^\*\\|$b" | xargs -n 1 git branch -d; }
 alias gs='git switch'
 alias gfr='git pull --rebase'
 alias gfa='git fetch --all'
@@ -37,10 +40,10 @@ gwt() {
   if [[ -n "$1" ]]; then
     branch="$1"
     local dest="$HOME/worktrees/${root}--${branch//\//-}"
-    git worktree add -b "$branch" "$dest" master && cd "$dest" && tat
+    git worktree add -b "$branch" "$dest" "$(_git_default_branch)" && cd "$dest" && tat
   else
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    if [[ "$branch" == "master" || "$branch" == "main" ]]; then
+    if [[ "$branch" == "$(_git_default_branch)" ]]; then
       echo "On $branch — pass a branch name to create a new worktree"
       return 1
     fi
@@ -53,7 +56,7 @@ gwt() {
       echo "Working tree is not clean — commit or stash changes first"
       return 1
     fi
-    git checkout master 2>/dev/null || git checkout main && \
+    git checkout "$(_git_default_branch)" && \
       git worktree add "$dest" "$branch" && cd "$dest" && tat
   fi
 }
