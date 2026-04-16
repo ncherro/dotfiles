@@ -29,6 +29,10 @@ gwt() {
     echo "Already in a worktree"
     return 1
   fi
+  if [[ -n "$TMUX" ]]; then
+    echo "Already in a tmux session — run gwt from outside tmux"
+    return 1
+  fi
   local root=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
   if [[ -z "$root" ]]; then
     echo "Not in a git repository"
@@ -38,7 +42,9 @@ gwt() {
   if [[ -n "$1" ]]; then
     branch="$1"
     local dest="$HOME/worktrees/${root}--${branch//\//-}"
-    git worktree add -b "$branch" "$dest" "$(_git_default_branch)" && cd "$dest" && tat
+    git worktree add -b "$branch" "$dest" "$(_git_default_branch)" && cd "$dest" && \
+      if [[ -n "$2" ]]; then spt git:sparse reset && spt git:sparse add "$2"; fi && \
+      tat
   else
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [[ "$branch" == "$(_git_default_branch)" ]]; then
@@ -196,7 +202,8 @@ review-pr() {
     tmux new-session -d -s "$session" -c "$dir"
   fi
 
-  tmux send-keys -t "$session" "claude '/review-pr $url'" Enter
+  # --dangerously-skip-permissions: reviews are read-only, skip the MCP/tool prompts
+  tmux send-keys -t "$session" "claude --dangerously-skip-permissions '/review-pr $url'" Enter
 
   if [[ -n "$TMUX" ]]; then
     tmux switch-client -t "$session"
