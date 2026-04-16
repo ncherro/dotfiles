@@ -9,7 +9,9 @@ source $DOTFILES/zsh/base.zsh
 
 # Work devex tooling (auto-managed by path_updater_lib.sh — do not remove)
 # re-added automatically if removed -_-
-export PATH=/opt/work-devex/bin:$PATH
 
 # Machine-local overrides (gitignored)
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
+export PATH="$HOME/.local/bin:$PATH"
+export PATH=/opt/work-devex/bin:$PATH
