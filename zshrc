@@ -6,6 +6,7 @@ case "$(uname -s)" in
 esac
 
 source $DOTFILES/zsh/base.zsh
+source $DOTFILES/zsh/tmux-workflows.zsh
 
 # Spotify devex tooling (auto-managed by path_updater_lib.sh — do not remove)
 # re-added automatically if removed -_-

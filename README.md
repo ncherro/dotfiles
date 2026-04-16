@@ -17,10 +17,13 @@ Config for zsh, vim, tmux, and git. Optimized for jumping between projects and b
 zshrc                  # entry point — detects OS, sources platform + base
 zsh/
   base.zsh             # cross-platform config (aliases, functions, prompt, tools)
+  tmux-workflows.zsh   # tmux + worktree workflow helpers (standalone, shareable)
   mac.zsh              # macOS-specific (Homebrew, NVM, etc.)
   linux.zsh            # Linux-specific (antidote, keychain, etc.)
 zsh_plugins.txt        # antidote plugin list
 zshrc.local.example    # template for machine-local overrides
+bin/
+  worktree-cleanup.sh  # clean up merged worktrees, stale sessions, and build caches
 tmux.conf
 vimrc
 kitty.conf
@@ -88,22 +91,82 @@ Open a new shell, launch vim and run `:PlugInstall`, then edit `~/.gitconfig` to
 
 **WSL only:** `sudo apt install wslu` — needed for `ghr`/`ghp` to open URLs in the Windows browser.
 
+## tmux-workflows
+
+`zsh/tmux-workflows.zsh` is a standalone plugin that bundles the tmux session management, git worktree, PR review, and notes workflows. It can be sourced independently from the rest of these dotfiles.
+
+### Usage
+
+Add to your `.zshrc`:
+
+```zsh
+source /path/to/tmux-workflows.zsh
+```
+
+### Dependencies
+
+| Tool | Required by | Notes |
+|------|-------------|-------|
+| `tmux` | all | Session management backbone |
+| `git` | all | Worktrees, branch detection, repo navigation |
+| `gh` | `ghp`, `worktree-cleanup.sh` | GitHub CLI |
+| `jq` | `worktree-cleanup.sh` | JSON parsing for PR status |
+| `claude` | `review-pr` | [Claude Code](https://claude.ai/code) CLI |
+
+### Configuration
+
+Set these before sourcing to override defaults:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKSPACE` | `~/workspace` | Primary project checkout directory |
+| `WORKTREES_DIR` | `~/worktrees` | Where git worktrees are created |
+| `NOTES_DIR` | `$WORKSPACE/_notes` | Research notes directory |
+| `REVIEWS_DIR` | `$NOTES_DIR/reviews` | PR review artifacts directory |
+| `OPEN_CMD` | `open` | Browser open command (`xdg-open` on Linux) |
+| `GWT_SPARSE_CHECKOUT_CMD` | *(empty)* | Sparse checkout command for `gwt`'s second arg (e.g. `spt git:sparse reset && spt git:sparse add`) |
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| `tat [dir]` | Create or attach to a tmux session named after the repo/branch |
+| `tatt <name>` | Fuzzy-match and attach to an existing tmux session |
+| `tls` | List tmux sessions, highlighting ones with active processes |
+| `gwt [branch] [service]` | Create a git worktree, optionally sparse checkout, open in tmux |
+| `ws [dir]` | cd into `$WORKSPACE` |
+| `wt [dir]` | cd into `$WORKTREES_DIR` |
+| `ghr` | Open the current repo on GitHub in the browser |
+| `ghp` | Open the current branch's PR in the browser |
+| `review-pr <url>` | Review a PR in a dedicated tmux session with Claude Code |
+| `notes <dirname>` | Open a research workspace in a dedicated tmux session |
+
+### Worktree cleanup
+
+`bin/worktree-cleanup.sh` checks each worktree's PR status and removes ones whose PRs are merged or closed. It also cleans up stale review directories and notes sessions.
+
+```sh
+# Symlink into your worktrees directory
+ln -s /path/to/dotfiles/bin/worktree-cleanup.sh ~/worktrees/cleanup.sh
+
+# Run it
+~/worktrees/cleanup.sh
+```
+
+Set `MONOREPO_DIR` to enable monorepo-specific cleanup (sparse query worktree reset, Bazel cache pruning):
+
+```sh
+export MONOREPO_DIR=~/workspace/my-monorepo
+```
+
 ## Color schemes
 
 Using [One Dark](https://github.com/joshdick/onedark.vim) via terminal / kitty color preferences.
 
-## Functions
+## Other functions (base.zsh)
 
-| Function | Description |
+| Function / Alias | Description |
 |----------|-------------|
-| `gwt` | Git worktree in ~/worktrees |
 | `gco` | Git checkout with auto-prefix for new branches |
-| `ghr` | Open the current repo in the browser |
-| `ghp` | Open the current branch's PR in the browser |
-| `tls` | List tmux sessions, highlighting ones running processes |
-| `tatt` | Attach to a tmux session by fuzzy name match |
-| `tat` | Attach or create a tmux session named after the repo/branch |
 | `tks` | Kill all tmux sessions |
 | `cd.` | cd to the git repo root |
-| `ws` | cd into ~/workspace |
-| `wt` | cd into ~/worktrees |
