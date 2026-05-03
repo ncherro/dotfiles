@@ -6,6 +6,34 @@ WORKTREES_DIR="$(cd "$(dirname "$0")" && pwd)"
 : "${REVIEWS_DIR:="$HOME/workspace/_notes/reviews"}"
 : "${NOTES_DIR:="$HOME/workspace/_notes"}"
 
+# compute the tmux session name the way zsh/tmux-workflows.zsh:tat() does:
+# basename(parent of git_common_dir) -- branch, with dots replaced by dashes
+_tmux_session_name() {
+  local dir="$1" branch="$2"
+  local git_common_dir
+  git_common_dir=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || return 1
+  git_common_dir=$(cd "$dir" && cd "$git_common_dir" && pwd)
+  local repo_base
+  repo_base=$(basename "$(dirname "$git_common_dir")")
+  local name="${repo_base}--${branch}"
+  echo "${name//./-}"
+}
+
+# stop a docker compose stack running in $1 (no-op if no compose file or no running containers)
+_stop_compose() {
+  local dir="$1"
+  command -v docker &>/dev/null || return 0
+  local compose_file=""
+  for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
+    if [ -f "$dir/$f" ]; then compose_file="$f"; break; fi
+  done
+  [ -n "$compose_file" ] || return 0
+  if (cd "$dir" && docker compose ps -q 2>/dev/null | grep -q .); then
+    echo "  STOP docker compose stack: $(basename "$dir")"
+    (cd "$dir" && docker compose down -v)
+  fi
+}
+
 for dir in "$WORKTREES_DIR"/*/; do
   [ -e "$dir/.git" ] || continue
 
@@ -20,12 +48,12 @@ for dir in "$WORKTREES_DIR"/*/; do
     echo "SKIP $(basename "$dir"): no PR found for branch $branch"
     read -rp "  Delete this worktree? [y/N] " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
-      repo_base=$(basename "$(git -C "$dir" remote get-url origin)" .git)
-      tmux_session="${repo_base}--${branch}"
+      tmux_session=$(_tmux_session_name "$dir" "$branch")
       if tmux has-session -t "$tmux_session" 2>/dev/null; then
         echo "  KILL tmux session: $tmux_session"
         tmux kill-session -t "$tmux_session"
       fi
+      _stop_compose "$dir"
       echo "  REMOVE worktree: $(basename "$dir")"
       git -C "$dir" worktree remove "$dir"
       # prune bazel output dirs for this worktree
@@ -50,12 +78,12 @@ for dir in "$WORKTREES_DIR"/*/; do
     echo "KEEP $(basename "$dir"): PR is still open ($url)"
   else
     echo "REMOVE $(basename "$dir"): PR is $state ($url)"
-    repo_base=$(basename "$(git -C "$dir" remote get-url origin)" .git)
-    tmux_session="${repo_base}--${branch}"
+    tmux_session=$(_tmux_session_name "$dir" "$branch")
     if tmux has-session -t "$tmux_session" 2>/dev/null; then
       echo "  KILL tmux session: $tmux_session"
       tmux kill-session -t "$tmux_session"
     fi
+    _stop_compose "$dir"
     git -C "$dir" worktree remove "$dir"
   fi
 done
