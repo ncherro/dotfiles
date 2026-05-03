@@ -59,9 +59,6 @@ alias nginx-reload="sudo /usr/local/bin/nginx -s reload"
 alias sites-enabled="cd /usr/local/etc/nginx/sites-enabled"
 nginx-restart() { nginx-stop; nginx-start; }
 
-# --- Browser opener ---
-_open() { open "$@"; }
-
 # --- Misc ---
 export NODE_PATH=/usr/local/lib/node_modules
 export LSCOLORS=ExFxBxDxCxegedabagacad
