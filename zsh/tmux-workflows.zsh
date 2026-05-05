@@ -93,6 +93,22 @@ tat() {
 # --- Git worktrees ---
 
 # Create or switch to a git worktree in $WORKTREES_DIR
+#
+# Usage:
+#   gwt <branch>                                       create worktree, attach tmux session
+#   gwt <branch> -p "<prompt>"                         + open Claude Code with the given prompt
+#   gwt <branch> -p path/to/prompt.md                  + read prompt from file
+#   gwt <branch> -p "<prompt>" --safer                 + --permission-mode acceptEdits (auto-accept edits, still confirm shell)
+#   gwt <branch> -p "<prompt>" --yolo                  + --dangerously-skip-permissions (bypass everything)
+#   gwt <branch> -p "<prompt>" --model <name>          + --model <name> (e.g. sonnet, haiku) — cheaper for routine work
+#   gwt <branch> <sparse-token> [-p ... [--safer|--yolo] [--model <name>]]
+#                                                      + apply $GWT_SPARSE_CHECKOUT_CMD
+#   gwt                                                inside a feature branch: switch to its worktree
+#
+# --safer vs --yolo: --safer is the recommended default for feature work
+# (auto-accepts file edits, still pauses on shell commands → fewer wasted
+# iteration cycles). --yolo is right for tight scaffolding where you trust
+# the agent to run anything.
 gwt() {
   if [[ "$PWD" == *"/worktrees/"* ]]; then
     echo "Already in a worktree"
@@ -102,20 +118,78 @@ gwt() {
     echo "Already in a tmux session — run gwt from outside tmux"
     return 1
   fi
-  local root=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
-  if [[ -z "$root" ]]; then
+  local source_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [[ -z "$source_root" ]]; then
     echo "Not in a git repository"
     return 1
   fi
-  local branch
+  local original_pwd="$PWD"
+  local root=$(basename "$source_root")
+
+  # Parse Claude-launch flags out of the arg list, leaving positional args.
+  local prompt="" mode="" model=""
+  local -a positional
+  positional=()
+  while (( $# )); do
+    case "$1" in
+      -p|--prompt)
+        if [[ -z "$2" ]]; then
+          echo "gwt: -p|--prompt requires a value (string or file path)"
+          return 1
+        fi
+        prompt="$2"
+        shift 2
+        ;;
+      --yolo)
+        mode="bypass"
+        shift
+        ;;
+      --safer)
+        mode="safer"
+        shift
+        ;;
+      --model)
+        if [[ -z "$2" ]]; then
+          echo "gwt: --model requires a value (e.g. sonnet, haiku)"
+          return 1
+        fi
+        model="$2"
+        shift 2
+        ;;
+      *)
+        positional+=("$1")
+        shift
+        ;;
+    esac
+  done
+  set -- "${positional[@]}"
+
+  if [[ ( -n "$mode" || -n "$model" ) && -z "$prompt" ]]; then
+    echo "gwt: --yolo, --safer, and --model only apply with -p|--prompt"
+    return 1
+  fi
+
+  # Resolve prompt source: if it points at an existing file, read it; otherwise treat as literal.
+  local prompt_text=""
+  if [[ -n "$prompt" ]]; then
+    if [[ -f "$prompt" ]]; then
+      prompt_text=$(<"$prompt")
+    else
+      prompt_text="$prompt"
+    fi
+  fi
+
+  local branch created=0
   if [[ -n "$1" ]]; then
     branch="$1"
     local dest="${WORKTREES_DIR}/${root}--${branch//\//-}"
-    git worktree add -b "$branch" "$dest" "$(_git_default_branch)" && cd "$dest" && \
-      if [[ -n "$2" && -n "$GWT_SPARSE_CHECKOUT_CMD" ]]; then
-        eval "$GWT_SPARSE_CHECKOUT_CMD $2"
-      fi && \
-      tat
+    git worktree add -b "$branch" "$dest" "$(_git_default_branch)" || return 1
+    [[ ! -f "$source_root/.env" ]] || cp "$source_root/.env" "$dest/.env"
+    cd "$dest" || return 1
+    if [[ -n "$2" && -n "$GWT_SPARSE_CHECKOUT_CMD" ]]; then
+      eval "$GWT_SPARSE_CHECKOUT_CMD $2" || return 1
+    fi
+    created=1
   else
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [[ "$branch" == "$(_git_default_branch)" ]]; then
@@ -124,16 +198,72 @@ gwt() {
     fi
     local dest="${WORKTREES_DIR}/${root}--${branch//\//-}"
     if [[ -d "$dest" ]]; then
-      cd "$dest" && tat
-      return
+      cd "$dest" || return 1
+    else
+      if [[ -n "$(git status --porcelain)" ]]; then
+        echo "Working tree is not clean — commit or stash changes first"
+        return 1
+      fi
+      git checkout "$(_git_default_branch)" || return 1
+      git worktree add "$dest" "$branch" || return 1
+      [[ ! -f "$source_root/.env" ]] || cp "$source_root/.env" "$dest/.env"
+      cd "$dest" || return 1
+      created=1
     fi
-    if [[ -n "$(git status --porcelain)" ]]; then
-      echo "Working tree is not clean — commit or stash changes first"
-      return 1
-    fi
-    git checkout "$(_git_default_branch)" && \
-      git worktree add "$dest" "$branch" && cd "$dest" && tat
   fi
+
+  # Auto-install pnpm deps if the source has them and this is a fresh worktree.
+  # Worktrees don't share node_modules, so a fresh worktree without an install
+  # has broken pnpm/typecheck/test commands until install completes. Skip for
+  # the existing-worktree path (the user has already worked here).
+  if (( created )) && [[ -d "$source_root/node_modules" && -f "$dest/package.json" && ! -d "$dest/node_modules" ]]; then
+    echo "→ Installing pnpm deps in $(basename "$dest") (source has node_modules)..."
+    (cd "$dest" && pnpm install) || \
+      echo "gwt: pnpm install failed — install manually before running pnpm commands in the worktree"
+  fi
+
+  # Hand off to tmux.
+  #
+  # No-prompt mode: defer to `tat` — creates+attaches in one step (you're
+  # launching ONE worktree, you want to be in it).
+  #
+  # Prompt mode: spin up a detached tmux session with Claude already running,
+  # then return to where the user was. Lets you fire multiple `gwt -p` calls
+  # in parallel without being teleported into each session. Attach later via
+  # `tatt <fragment>` or `tmux attach -t <session>`.
+  if [[ -z "$prompt_text" ]]; then
+    tat
+    return
+  fi
+
+  # Match tat's session naming convention: dirname--branch with dots → dashes.
+  local session_name="${root}--${branch}"
+  session_name=${session_name//./-}
+
+  if ! tmux has-session -t "$session_name" 2>/dev/null; then
+    tmux new-session -d -s "$session_name" -c "$dest"
+  fi
+
+  # Pass the prompt to Claude via a temp file so we don't have to escape it for
+  # tmux send-keys. The new shell evaluates "$(cat ...)" cleanly.
+  local tmpfile
+  tmpfile=$(mktemp -t "gwt-prompt-XXXXXX") || return 1
+  print -r -- "$prompt_text" > "$tmpfile"
+
+  local claude_flags=""
+  case "$mode" in
+    bypass) claude_flags+=" --dangerously-skip-permissions" ;;
+    safer)  claude_flags+=" --permission-mode acceptEdits" ;;
+  esac
+  [[ -n "$model" ]] && claude_flags+=" --model $model"
+
+  tmux send-keys -t "$session_name" "claude${claude_flags} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
+
+  # Return user to their original cwd; don't attach.
+  cd "$original_pwd"
+  echo "Worktree:    $dest"
+  echo "Tmux:        $session_name (detached)"
+  echo "Attach with: tatt $session_name   # or: tmux attach -t $session_name"
 }
 
 # --- Navigation ---

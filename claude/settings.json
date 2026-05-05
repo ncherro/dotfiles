@@ -33,5 +33,6 @@
       "Read(.env*)"
     ]
   },
+  "skipDangerousModePermissionPrompt": true,
   "voiceEnabled": true
 }
