@@ -84,10 +84,18 @@ tat() {
   fi
   session_name=${session_name//./-}
   if tmux ls 2>/dev/null | grep -q "^${session_name}:"; then
-    tmux at -t "$session_name"
+    if [[ -n "$TMUX" ]]; then
+      tmux switch-client -t "$session_name"
+    else
+      tmux at -t "$session_name"
+    fi
     return 0
   fi
-  tmux new -s "$session_name"
+  if [[ -n "$TMUX" ]]; then
+    tmux new-session -d -s "$session_name" && tmux switch-client -t "$session_name"
+  else
+    tmux new -s "$session_name"
+  fi
 }
 
 # --- Git worktrees ---
@@ -112,10 +120,6 @@ tat() {
 gwt() {
   if [[ "$PWD" == *"/worktrees/"* ]]; then
     echo "Already in a worktree"
-    return 1
-  fi
-  if [[ -n "$TMUX" ]]; then
-    echo "Already in a tmux session — run gwt from outside tmux"
     return 1
   fi
   local source_root=$(git rev-parse --show-toplevel 2>/dev/null)
