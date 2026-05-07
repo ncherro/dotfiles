@@ -216,14 +216,21 @@ gwt() {
     fi
   fi
 
-  # Auto-install pnpm deps if the source has them and this is a fresh worktree.
+  # Auto-install JS deps if the source has them and this is a fresh worktree.
   # Worktrees don't share node_modules, so a fresh worktree without an install
-  # has broken pnpm/typecheck/test commands until install completes. Skip for
-  # the existing-worktree path (the user has already worked here).
+  # has broken typecheck/test commands until install completes. Detect the
+  # package manager from lockfiles (most reliable signal).
   if (( created )) && [[ -d "$source_root/node_modules" && -f "$dest/package.json" && ! -d "$dest/node_modules" ]]; then
-    echo "→ Installing pnpm deps in $(basename "$dest") (source has node_modules)..."
-    (cd "$dest" && pnpm install) || \
-      echo "gwt: pnpm install failed — install manually before running pnpm commands in the worktree"
+    local pm=""
+    if [[ -f "$dest/pnpm-lock.yaml" ]]; then pm="pnpm"
+    elif [[ -f "$dest/yarn.lock" ]]; then pm="yarn"
+    elif [[ -f "$dest/package-lock.json" ]]; then pm="npm"
+    fi
+    if [[ -n "$pm" ]]; then
+      echo "→ Installing deps in $(basename "$dest") via $pm (source has node_modules)..."
+      (cd "$dest" && "$pm" install) || \
+        echo "gwt: $pm install failed — install manually"
+    fi
   fi
 
   # Hand off to tmux.
