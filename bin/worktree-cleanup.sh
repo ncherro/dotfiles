@@ -34,6 +34,51 @@ _stop_compose() {
   fi
 }
 
+_cleanup_worktree() {
+  local dir="$1"
+  local branch
+  branch=$(git -C "$dir" branch --show-current 2>/dev/null || true)
+  if [ -n "$branch" ]; then
+    local tmux_session
+    tmux_session=$(_tmux_session_name "$dir" "$branch")
+    if tmux has-session -t "$tmux_session" 2>/dev/null; then
+      echo "  KILL tmux session: $tmux_session"
+      tmux kill-session -t "$tmux_session"
+    fi
+  fi
+  _stop_compose "$dir"
+  local name
+  name=$(basename "$dir")
+  echo "  REMOVE worktree: $name"
+  git -C "$dir" worktree remove --force "$dir"
+  local bazel_output="$HOME/.cache/bazel/_bazel_$(whoami)"
+  if [ -d "$bazel_output" ]; then
+    for bo in "$bazel_output"/*/DO_NOT_BUILD_HERE; do
+      if [ -f "$bo" ] && grep -q "$name" "$bo" 2>/dev/null; then
+        local bazel_dir
+        bazel_dir=$(dirname "$bo")
+        echo "  REMOVE bazel cache: $(basename "$bazel_dir")"
+        rm -rf "$bazel_dir"
+      fi
+    done
+  fi
+}
+
+# targeted cleanup: pass a dir name to remove a single worktree
+if [ $# -gt 0 ]; then
+  target="$WORKTREES_DIR/$1"
+  if [ ! -d "$target" ]; then
+    echo "ERROR: $target does not exist"
+    exit 1
+  fi
+  if [ ! -e "$target/.git" ]; then
+    echo "ERROR: $target is not a git worktree"
+    exit 1
+  fi
+  _cleanup_worktree "$target"
+  exit 0
+fi
+
 for dir in "$WORKTREES_DIR"/*/; do
   [ -e "$dir/.git" ] || continue
 
@@ -48,25 +93,7 @@ for dir in "$WORKTREES_DIR"/*/; do
     echo "SKIP $(basename "$dir"): no PR found for branch $branch"
     read -rp "  Delete this worktree? [y/N] " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
-      tmux_session=$(_tmux_session_name "$dir" "$branch")
-      if tmux has-session -t "$tmux_session" 2>/dev/null; then
-        echo "  KILL tmux session: $tmux_session"
-        tmux kill-session -t "$tmux_session"
-      fi
-      _stop_compose "$dir"
-      echo "  REMOVE worktree: $(basename "$dir")"
-      git -C "$dir" worktree remove "$dir"
-      # prune bazel output dirs for this worktree
-      bazel_output="$HOME/.cache/bazel/_bazel_$(whoami)"
-      if [ -d "$bazel_output" ]; then
-        for bo in "$bazel_output"/*/DO_NOT_BUILD_HERE; do
-          if [ -f "$bo" ] && grep -q "$(basename "$dir")" "$bo" 2>/dev/null; then
-            bazel_dir=$(dirname "$bo")
-            echo "  REMOVE bazel cache: $(basename "$bazel_dir")"
-            rm -rf "$bazel_dir"
-          fi
-        done
-      fi
+      _cleanup_worktree "$dir"
     fi
     continue
   fi
@@ -78,13 +105,7 @@ for dir in "$WORKTREES_DIR"/*/; do
     echo "KEEP $(basename "$dir"): PR is still open ($url)"
   else
     echo "REMOVE $(basename "$dir"): PR is $state ($url)"
-    tmux_session=$(_tmux_session_name "$dir" "$branch")
-    if tmux has-session -t "$tmux_session" 2>/dev/null; then
-      echo "  KILL tmux session: $tmux_session"
-      tmux kill-session -t "$tmux_session"
-    fi
-    _stop_compose "$dir"
-    git -C "$dir" worktree remove "$dir"
+    _cleanup_worktree "$dir"
   fi
 done
 
