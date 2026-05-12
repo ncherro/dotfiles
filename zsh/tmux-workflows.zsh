@@ -244,6 +244,7 @@ gwt() {
   # `tatt <fragment>` or `tmux attach -t <session>`.
   if [[ -z "$prompt_text" ]]; then
     tat
+    cd "$original_pwd"
     return
   fi
 
