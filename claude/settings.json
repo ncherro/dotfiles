@@ -24,15 +24,21 @@
       "MultiEdit",
       "Read",
       "Write",
-      "mcp__playwright__*"
+      "mcp__playwright__*",
+      "mcp__atlassian__*"
     ],
     "deny": [
       "Read(node_modules/**)",
       "Read(build/**)",
       "Read(dist/**)",
       "Read(.env*)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "voiceEnabled": true
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": true,
+  "agentPushNotifEnabled": true,
+  "inputNeededNotifEnabled": true
 }
