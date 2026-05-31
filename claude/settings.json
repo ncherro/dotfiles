@@ -40,5 +40,17 @@
   "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
   "agentPushNotifEnabled": true,
-  "inputNeededNotifEnabled": true
+  "inputNeededNotifEnabled": true,
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [{"type": "command", "command": "terminal-notifier -title 'Claude Code' -message 'Ready for input'"}]
+      },
+      {
+        "matcher": "permission_prompt",
+        "hooks": [{"type": "command", "command": "terminal-notifier -title 'Claude Code' -message 'Permission required' -sound default"}]
+      }
+    ]
+  }
 }
