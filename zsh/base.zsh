@@ -53,8 +53,10 @@ alias stamp="date +%F-%H%M%S"
 alias cap="nocorrect cap"
 alias v="vim"
 alias h="history"
-alias dco=docker-compose
-alias dc=docker-compose
+alias dco="docker compose"
+alias dc="docker compose"
+alias dcps='docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"'
+alias dcps-all="docker compose ps"
  
 alias c=claude
 
