@@ -13,8 +13,22 @@ alias gpf='git pf'
 alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"'
 alias gd='git add -N . && git diff && git reset'
 alias gs='git switch'
-alias gfr='git pull --rebase'
+unalias gfr 2>/dev/null
+gfr() {
+  if [[ "$(git rev-parse --show-toplevel 2>/dev/null)" == "$HOME/workspace/services-pilot" ]]; then
+    spt git:fetch-local && git rebase
+  else
+    git pull --rebase "$@"
+  fi
+}
 alias gfa='git fetch --all'
+unalias grm 2>/dev/null
+grm() {
+  local default_branch
+  default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+  : ${default_branch:=master}
+  git fetch origin "$default_branch" && git rebase "origin/$default_branch"
+}
 alias glo='git log'
 alias gsha="git rev-parse --short HEAD"
 alias gti="git"

@@ -104,11 +104,13 @@ tat() {
 #
 # Usage:
 #   gwt <branch>                                       create worktree, attach tmux session
+#   gwt <branch> --install                             + auto-install deps (npm/yarn/pnpm)
 #   gwt <branch> -p "<prompt>"                         + open Claude Code with the given prompt
 #   gwt <branch> -p path/to/prompt.md                  + read prompt from file
 #   gwt <branch> -p "<prompt>" --safer                 + --permission-mode acceptEdits (auto-accept edits, still confirm shell)
 #   gwt <branch> -p "<prompt>" --yolo                  + --dangerously-skip-permissions (bypass everything)
 #   gwt <branch> -p "<prompt>" --model <name>          + --model <name> (e.g. sonnet, haiku) — cheaper for routine work
+#   gwt <branch> --sparse                              + copy sparse checkout from default branch
 #   gwt <branch> <sparse-token> [-p ... [--safer|--yolo] [--model <name>]]
 #                                                      + apply $GWT_SPARSE_CHECKOUT_CMD
 #   gwt                                                inside a feature branch: switch to its worktree
@@ -131,7 +133,7 @@ gwt() {
   local root=$(basename "$source_root")
 
   # Parse Claude-launch flags out of the arg list, leaving positional args.
-  local prompt="" mode="" model=""
+  local prompt="" mode="" model="" install=0 sparse=0
   local -a positional
   positional=()
   while (( $# )); do
@@ -160,6 +162,14 @@ gwt() {
         model="$2"
         shift 2
         ;;
+      --install)
+        install=1
+        shift
+        ;;
+      --sparse)
+        sparse=1
+        shift
+        ;;
       *)
         positional+=("$1")
         shift
@@ -170,6 +180,11 @@ gwt() {
 
   if [[ ( -n "$mode" || -n "$model" ) && -z "$prompt" ]]; then
     echo "gwt: --yolo, --safer, and --model only apply with -p|--prompt"
+    return 1
+  fi
+
+  if (( install )) && [[ -z "$1" ]]; then
+    echo "gwt: --install only applies when creating a new worktree"
     return 1
   fi
 
@@ -216,11 +231,16 @@ gwt() {
     fi
   fi
 
-  # Auto-install JS deps if the source has them and this is a fresh worktree.
-  # Worktrees don't share node_modules, so a fresh worktree without an install
-  # has broken typecheck/test commands until install completes. Detect the
-  # package manager from lockfiles (most reliable signal).
-  if (( created )) && [[ -d "$source_root/node_modules" && -f "$dest/package.json" && ! -d "$dest/node_modules" ]]; then
+  if (( created && sparse )); then
+    echo "→ Copying sparse checkout from $(_git_default_branch)..."
+    spt git:sparse copy-from-branch "$(_git_default_branch)" || {
+      echo "gwt: sparse checkout copy failed"
+      cd "$original_pwd"
+      return 1
+    }
+  fi
+
+  if (( created && install )) && [[ -d "$source_root/node_modules" && -f "$dest/package.json" && ! -d "$dest/node_modules" ]]; then
     local pm=""
     if [[ -f "$dest/pnpm-lock.yaml" ]]; then pm="pnpm"
     elif [[ -f "$dest/yarn.lock" ]]; then pm="yarn"
@@ -303,6 +323,20 @@ ghp() {
 
 # --- Workflow: PR Reviews ---
 
+_review_parse_url() {
+  local url="$1"
+  _rv_owner=$(echo "$url" | sed -E 's|https?://[^/]+/([^/]+)/.*|\1|')
+  _rv_repo=$(echo "$url" | sed -E 's|.*/([^/]+)/pull/.*|\1|')
+  _rv_number=$(echo "$url" | sed -E 's|.*/pull/([0-9]+).*|\1|')
+}
+
+_review_infer_from_dirname() {
+  local dirname="$1"
+  _rv_repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
+  _rv_number=$(echo "$dirname" | grep -oE '[0-9]+$')
+  _rv_owner="spotify"
+}
+
 # Review a PR in a dedicated tmux session with Claude Code
 review-pr() {
   local url="$1"
@@ -311,44 +345,367 @@ review-pr() {
     return 1
   fi
 
-  local service pr_number
-  service=$(echo "$url" | sed -E 's|.*/([^/]+)/pull/.*|\1|')
-  pr_number=$(echo "$url" | sed -E 's|.*/pull/([0-9]+).*|\1|')
+  local _rv_owner _rv_repo _rv_number
+  _review_parse_url "$url"
 
-  if [[ -z "$service" || -z "$pr_number" ]]; then
-    echo "Could not parse service and PR number from URL"
+  if [[ -z "$_rv_owner" || -z "$_rv_repo" || -z "$_rv_number" ]]; then
+    echo "Could not parse owner, repo, and PR number from URL"
     return 1
   fi
 
-  local dirname="${service}-${pr_number}"
+  local dirname="${_rv_repo}--${_rv_number}"
   local dir="${REVIEWS_DIR}/${dirname}"
   mkdir -p "$dir"
 
-  local session="review--${dirname}"
+  local head_commit
+  head_commit=$(GH_HOST=ghe.spotify.net gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
+    --jq '.head.sha' 2>/dev/null || echo "unknown")
 
-  if ! tmux has-session -t "$session" 2>/dev/null; then
-    tmux new-session -d -s "$session" -c "$dir"
+  local meta="${dir}/.review-meta.json"
+  if [[ -f "$meta" ]]; then
+    local prev_commit
+    prev_commit=$(jq -r '.head_commit' "$meta")
+    if [[ "$prev_commit" == "$head_commit" && "$head_commit" != "unknown" ]]; then
+      echo "No new commits since last review (${head_commit:0:7})"
+      return 0
+    fi
+    local tmp
+    tmp=$(jq \
+      --arg head "$head_commit" \
+      --arg reviewed "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '.head_commit = $head | .reviewed_at = $reviewed' "$meta")
+    printf '%s\n' "$tmp" > "$meta"
+  else
+    cat > "$meta" <<EOF
+{
+  "url": "${url}",
+  "owner": "${_rv_owner}",
+  "repo": "${_rv_repo}",
+  "pr_number": ${_rv_number},
+  "head_commit": "${head_commit}",
+  "reviewed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "comments": []
+}
+EOF
   fi
 
-  tmux send-keys -t "$session" \
+  local session="pr-reviews"
+  local window="${_rv_repo}--${_rv_number}"
+
+  if ! tmux has-session -t "$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$REVIEWS_DIR"
+  fi
+
+  if tmux list-windows -t "$session" -F '#{window_name}' | grep -qxF "$window"; then
+    tmux select-window -t "${session}:${window}"
+  else
+    tmux new-window -t "$session" -n "$window" -c "$dir"
+  fi
+
+  tmux send-keys -t "${session}:${window}" \
     "claude --dangerously-skip-permissions '/review-pr $url'" Enter
 
   if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t "$session"
+    tmux switch-client -t "${session}:${window}"
   else
-    tmux attach-session -t "$session"
+    tmux attach-session -t "${session}:${window}"
   fi
+}
+
+# Show status of all tracked PR reviews
+review-status() {
+  setopt local_options typeset_silent no_xtrace no_verbose
+  local reviews_dir="${REVIEWS_DIR}"
+  if [[ ! -d "$reviews_dir" ]]; then
+    echo "No reviews directory found"
+    return 1
+  fi
+
+  local -a review_dirs=("$reviews_dir"/*/(:N))
+  if (( ${#review_dirs[@]} == 0 )); then
+    echo "No reviews found"
+    return 0
+  fi
+
+  local total=${#review_dirs[@]} current=0
+  _review_spinner() {
+    local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+    while true; do
+      printf '\r  %s %s' "${chars:$((i % ${#chars})):1}" "$1" >&2
+      ((i++))
+      sleep 0.08
+    done
+  }
+  _review_spinner "Checking ${total} reviews..." &!
+  local spin_pid=$!
+  trap "kill $spin_pid 2>/dev/null; printf '\r\033[K' >&2" EXIT INT TERM
+
+  local -a attention updated open approved merged closed
+  local my_login
+  my_login=$(GH_HOST=ghe.spotify.net gh api user --jq '.login' 2>/dev/null)
+  local found=0
+
+  for dir in "${review_dirs[@]}"; do
+    [[ -d "$dir" ]] || continue
+    found=1
+    local dirname=$(basename "$dir")
+    local meta="${dir}.review-meta.json"
+
+    local owner repo number head_commit="unknown" url=""
+    if [[ -f "$meta" ]]; then
+      owner=$(jq -r '.owner' "$meta")
+      repo=$(jq -r '.repo' "$meta")
+      number=$(jq -r '.pr_number' "$meta")
+      head_commit=$(jq -r '.head_commit' "$meta")
+      url=$(jq -r '.url' "$meta")
+    else
+      repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
+      number=$(echo "$dirname" | grep -oE '[0-9]+$')
+      owner="spotify"
+      url="https://ghe.spotify.net/${owner}/${repo}/pull/${number}"
+    fi
+
+    local pr_json
+    pr_json=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}" \
+      --jq '{state: .state, merged: .merged, head: .head.sha, title: .title}' 2>/dev/null)
+
+    if [[ -z "$pr_json" ]]; then
+      attention+=("  ? ${dirname}  (could not fetch PR status)")
+      continue
+    fi
+
+    local state current_head title is_merged
+    state=$(echo "$pr_json" | jq -r '.state')
+    is_merged=$(echo "$pr_json" | jq -r '.merged')
+    current_head=$(echo "$pr_json" | jq -r '.head')
+    title=$(echo "$pr_json" | jq -r '.title')
+
+    local short_title="${title:0:60}"
+    [[ ${#title} -gt 60 ]] && short_title="${short_title}…"
+
+    if [[ "$is_merged" == "true" ]]; then
+      merged+=("  $(printf '%-30s %s' "$dirname" "$short_title")" "    ${url}" "")
+    elif [[ "$state" == "closed" ]]; then
+      closed+=("  $(printf '%-30s %s' "$dirname" "$short_title")" "    ${url}" "")
+    else
+      local my_review_state=""
+      if [[ -n "$my_login" ]]; then
+        my_review_state=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
+          --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null)
+      fi
+
+      local has_new_commits=0 reply_count=0
+
+      if [[ "$head_commit" != "unknown" && "$head_commit" != "$current_head" ]]; then
+        has_new_commits=1
+      fi
+
+      if [[ -f "$meta" ]] && jq -e '.comments | length > 0' "$meta" &>/dev/null; then
+        local my_comment_ids
+        my_comment_ids=$(jq -r '[.comments[].id] | join(",")' "$meta")
+        local all_comments
+        all_comments=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
+          --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null)
+        if [[ -n "$all_comments" ]]; then
+          reply_count=$(echo "$all_comments" | jq --arg ids "$my_comment_ids" '
+            ($ids | split(",") | map(tonumber)) as $mine |
+            [.[] | select(.in_reply_to_id != null and (.in_reply_to_id | IN($mine[])))] | length
+          ')
+        fi
+      fi
+
+      if [[ "$my_review_state" == "APPROVED" ]]; then
+        approved+=("    $(printf '%-28s %s' "$dirname" "$short_title")")
+        approved+=("    ${url}" "")
+      elif (( reply_count > 0 )); then
+        local flags="${reply_count} replies"
+        (( has_new_commits )) && flags+=", new commits"
+        attention+=("  * $(printf '%-28s %-20s %s' "$dirname" "[$flags]" "$short_title")")
+        attention+=("    ${url}" "")
+      elif (( has_new_commits )); then
+        updated+=("  ~ $(printf '%-28s %s' "$dirname" "$short_title")")
+        updated+=("    ${url}" "")
+      else
+        open+=("    $(printf '%-28s %s' "$dirname" "$short_title")")
+        open+=("    ${url}" "")
+      fi
+    fi
+  done
+
+  kill $spin_pid 2>/dev/null
+  wait $spin_pid 2>/dev/null
+  printf '\r\033[K' >&2
+  trap - EXIT INT TERM
+
+  if (( ! found )); then
+    echo "No reviews found"
+    return 0
+  fi
+
+  if (( ${#attention[@]} )); then
+    echo "Needs attention:"
+    printf '%s\n' "${attention[@]}"
+    echo ""
+  fi
+  if (( ${#updated[@]} )); then
+    echo "Updated:"
+    printf '%s\n' "${updated[@]}"
+    echo ""
+  fi
+  if (( ${#open[@]} )); then
+    echo "Open:"
+    printf '%s\n' "${open[@]}"
+    echo ""
+  fi
+  if (( ${#approved[@]} )); then
+    echo "Approved:"
+    printf '%s\n' "${approved[@]}"
+    echo ""
+  fi
+  if (( ${#merged[@]} )); then
+    echo "Merged:"
+    printf '%s\n' "${merged[@]}"
+    echo ""
+  fi
+  if (( ${#closed[@]} )); then
+    echo "Closed:"
+    printf '%s\n' "${closed[@]}"
+  fi
+}
+
+# Remove review dirs for merged/closed PRs
+review-cleanup() {
+  setopt local_options typeset_silent no_xtrace no_verbose
+  local reviews_dir="${REVIEWS_DIR}"
+  local -a to_remove
+
+  for dir in "$reviews_dir"/*/; do
+    [[ -d "$dir" ]] || continue
+    local dirname=$(basename "$dir")
+    local meta="${dir}.review-meta.json"
+
+    local owner repo number
+    if [[ -f "$meta" ]]; then
+      owner=$(jq -r '.owner' "$meta")
+      repo=$(jq -r '.repo' "$meta")
+      number=$(jq -r '.pr_number' "$meta")
+    else
+      repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
+      number=$(echo "$dirname" | grep -oE '[0-9]+$')
+      owner="spotify"
+    fi
+
+    local pr_state
+    pr_state=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}" \
+      --jq '"\(.state):\(.merged)"' 2>/dev/null)
+
+    if [[ "$pr_state" == "closed:true" || "$pr_state" == "closed:false" ]]; then
+      to_remove+=("$dirname")
+    fi
+  done
+
+  if (( ! ${#to_remove[@]} )); then
+    echo "No merged or closed reviews to clean up"
+    return 0
+  fi
+
+  echo "Will remove ${#to_remove[@]} review(s):"
+  printf '  %s\n' "${to_remove[@]}"
+  echo ""
+  read -q "?Proceed? [y/N] " || { echo; return 0; }
+  echo ""
+
+  for dirname in "${to_remove[@]}"; do
+    tmux kill-window -t "pr-reviews:${dirname}" 2>/dev/null
+    rm -rf "${reviews_dir}/${dirname}"
+    echo "  removed ${dirname}"
+  done
 }
 
 # --- Workflow: Notes ---
 
+# Resolve a topic query to a notes dirname. Exact matches pass through;
+# fuzzy queries search existing dirs and offer fzf selection.
+_notes_resolve() {
+  local query="$*"
+  local slug="${(L)query// /-}"
+
+  # Exact match — use it directly
+  if [[ -d "${NOTES_DIR}/${slug}" ]]; then
+    echo "$slug"
+    return
+  fi
+
+  # No existing dirs — create without prompting
+  local -a existing=( "${NOTES_DIR}"/*(/:t) )
+  if (( ${#existing} == 0 )); then
+    echo "$slug"
+    return
+  fi
+
+  # Score existing dirs by word overlap with the query
+  local -a query_words=( ${(s:-:)slug} )
+  local -a scored=()  # "score:dirname" pairs
+  local d w hits best=0
+  for d in "${existing[@]}"; do
+    hits=0
+    for w in "${query_words[@]}"; do
+      [[ "$d" == *"$w"* ]] && (( hits++ ))
+    done
+    if (( hits > 0 )); then
+      scored+=( "${hits}:${d}" )
+      (( hits > best )) && best=$hits
+    fi
+  done
+
+  # If only single-word matches and there are many, keep only those
+  # with the longest matching word to reduce noise
+  local -a candidates=()
+  if (( best >= 2 )); then
+    # Keep dirs with 2+ word hits
+    for entry in "${scored[@]}"; do
+      (( ${entry%%:*} >= 2 )) && candidates+=( "${entry#*:}" )
+    done
+  else
+    # All matches are 1-word; include them all (fzf will rank)
+    for entry in "${scored[@]}"; do
+      candidates+=( "${entry#*:}" )
+    done
+  fi
+
+  if (( ${#candidates} == 0 )); then
+    echo "$slug"
+    return
+  fi
+
+  candidates=( ${(o)candidates} )
+  candidates+=( "+ create: ${slug}" )
+
+  local pick
+  pick=$( printf '%s\n' "${candidates[@]}" \
+    | fzf --height=~15 --reverse --prompt="notes> " \
+           --query="$slug" --select-1 --exit-0 \
+           --header="Pick an existing dir or create new" )
+
+  [[ -z "$pick" ]] && return 1
+
+  if [[ "$pick" == "+ create: "* ]]; then
+    echo "$slug"
+  else
+    echo "$pick"
+  fi
+}
+
 # Open a notes directory in a dedicated tmux session
 notes() {
-  local dirname="$1"
-  if [[ -z "$dirname" ]]; then
-    echo "Usage: notes <dirname>"
+  if [[ -z "$*" ]]; then
+    echo "Usage: notes <topic>"
     return 1
   fi
+
+  local dirname
+  dirname=$(_notes_resolve "$@") || return 1
 
   local dir="${NOTES_DIR}/${dirname}"
   mkdir -p "$dir"
