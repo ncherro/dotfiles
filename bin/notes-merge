@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""Merge scratch dirs into one, keeping every pointer into them intact.
+
+    notes-merge --target distribution-api \\
+                --absorb distro-api \\
+                --absorb distro-api-episode-status=episode-status \\
+                [--apply]
+
+Dry run unless --apply is given. Decides nothing: which dirs belong together,
+and what the merged dir is called, are judgment calls that belong to the caller
+(see the /notes-merge command). This does the mechanical part, which is the part
+that is easy to get quietly wrong:
+
+  * moves each absorbed dir to <target>/<subdir>
+  * rewrites every `_notes/<old-slug>` reference in the knowledge base -- topic
+    files, index.md, gdocs.md -- and inside the moved dirs themselves
+  * records provenance in <target>/.session.json, including each absorbed dir's
+    Claude Code transcript directory
+
+That last point is the reason this script exists rather than a shell one-liner.
+A transcript dir is named after the path it was opened at
+(`-Users-you-workspace--notes-<slug>`), so it does not follow the dir when it
+moves, and `/wrap --recover <slug>` loses its handle. For a lot of sessions the
+transcript is the only artifact, so a merge that does not record it destroys the
+most valuable thing in the dir while appearing to succeed.
+
+Nothing is deleted. Every change is captured in an undo script under
+$NOTES_DIR/.merge-undo/<timestamp>/, including byte-for-byte backups of every
+file edited.
+
+Env: NOTES_DIR (default ~/workspace/_notes)
+     NOTES_KB  (default ~/workspace/notes-kb)
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+NOTES_DIR = Path(os.environ.get("NOTES_DIR", HOME / "workspace/_notes"))
+NOTES_KB = Path(os.environ.get("NOTES_KB", HOME / "workspace/notes-kb"))
+
+PRUNE = {"node_modules", ".git", ".venv", "__pycache__", "target", "dist"}
+# Files worth rewriting references in. Anything else is data.
+TEXT_SUFFIXES = {".md", ".sh", ".zsh", ".bash", ".py", ".json", ".txt", ".yaml", ".yml"}
+
+SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def die(msg):
+    sys.stderr.write("notes-merge: {}\n".format(msg))
+    sys.exit(1)
+
+
+def transcript_dir_for(slug):
+    """Mirrors notes-index's encoding: /, _ and . all become '-'."""
+    encoded = re.sub(r"[/_.]", "-", str(NOTES_DIR / slug).lstrip("/"))
+    return "-" + encoded
+
+
+def tokens(slug):
+    return [t for t in re.split(r"[-_.]", slug.lower()) if t]
+
+
+def same_word(a, b):
+    """Whether two slug tokens name the same thing.
+
+    Prefix matching is not enough: the abbreviations in play here diverge from
+    the word they shorten (`distro` vs `distribution` part company at the sixth
+    character), so compare shared prefix length instead. Five is conservative --
+    it pairs distro/distribution and ep/episode's longer forms, but not
+    api/apollo."""
+    if a == b:
+        return True
+    shared = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        shared += 1
+    return shared >= 5
+
+
+def default_subdir(target, slug):
+    """`distro-api-episode-status` under `distribution-api` -> `episode-status`.
+
+    Strips leading tokens the target already says, so subdir names read as what
+    distinguishes them rather than repeating their parent. A guess -- the caller
+    can always pass `--absorb slug=name`."""
+    target_tokens = set(tokens(target))
+    parts = tokens(slug)
+    i = 0
+    while i < len(parts):
+        if any(same_word(parts[i], t) for t in target_tokens):
+            i += 1
+            continue
+        break
+    remainder = "-".join(parts[i:])
+    # Everything was redundant (the dir is just another name for the target):
+    # keep the original slug so provenance stays legible.
+    return remainder or slug
+
+
+def iter_text_files(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in PRUNE]
+        for name in filenames:
+            if Path(name).suffix.lower() in TEXT_SUFFIXES:
+                yield Path(dirpath) / name
+
+
+def reference_pattern(slug):
+    """`_notes/<slug>` not followed by another slug character.
+
+    The boundary matters: without it, rewriting `_notes/distro-api` would
+    corrupt every `_notes/distro-api-migrations` reference in the same file."""
+    return re.compile(r"_notes/" + re.escape(slug) + r"(?![A-Za-z0-9._-])")
+
+
+def plan_rewrites(moves, search_roots):
+    """[(path, [(lineno, before, after)], new_text)] for every affected file."""
+    patterns = [(reference_pattern(slug), "_notes/{}/{}".format(target_rel, sub), slug)
+                for slug, sub, target_rel in moves]
+
+    seen = set()
+    out = []
+    for root in search_roots:
+        if not Path(root).exists():
+            continue
+        for path in iter_text_files(root):
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            new_text = text
+            for pattern, replacement, _slug in patterns:
+                new_text = pattern.sub(replacement, new_text)
+            if new_text == text:
+                continue
+            hits = []
+            for n, (before, after) in enumerate(
+                    zip(text.splitlines(), new_text.splitlines()), start=1):
+                if before != after:
+                    hits.append((n, before.strip(), after.strip()))
+            out.append((path, hits, new_text))
+    return out
+
+
+def load_session(path):
+    f = path / ".session.json"
+    if not f.is_file():
+        return {}
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def tmux_sessions():
+    try:
+        out = subprocess.run(["tmux", "ls", "-F", "#{session_name}"],
+                             capture_output=True, text=True, timeout=10)
+        return set(out.stdout.split())
+    except (OSError, subprocess.SubprocessError):
+        return set()
+
+
+def main():
+    ap = argparse.ArgumentParser(add_help=True, description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--target", required=True,
+                    help="dir the others merge into, normally a KB topic slug")
+    ap.add_argument("--absorb", action="append", default=[], metavar="SLUG[=SUBDIR]",
+                    help="dir to absorb; repeatable")
+    ap.add_argument("--apply", action="store_true",
+                    help="actually do it (default is a dry run)")
+    args = ap.parse_args()
+
+    target = args.target.strip("/")
+    if not SLUG_RE.match(target):
+        die("bad target name: {}".format(target))
+    if not args.absorb:
+        die("nothing to absorb")
+
+    target_dir = NOTES_DIR / target
+
+    moves = []
+    for spec in args.absorb:
+        slug, _, sub = spec.partition("=")
+        slug = slug.strip("/")
+        if not SLUG_RE.match(slug):
+            die("bad slug: {}".format(slug))
+        if slug == target:
+            die("cannot absorb {} into itself".format(slug))
+        src = NOTES_DIR / slug
+        if not src.is_dir():
+            die("no such dir: {}".format(src))
+        sub = sub or default_subdir(target, slug)
+        if not SLUG_RE.match(sub):
+            die("bad subdir name: {}".format(sub))
+        moves.append((slug, sub, target))
+
+    subs = [m[1] for m in moves]
+    dupes = {s for s in subs if subs.count(s) > 1}
+    if dupes:
+        die("subdir name collision: {} — disambiguate with --absorb slug=name"
+            .format(", ".join(sorted(dupes))))
+    for slug, sub, _ in moves:
+        if (target_dir / sub).exists():
+            die("{} already exists".format(target_dir / sub))
+
+    rewrites = plan_rewrites(moves, [NOTES_KB] + [NOTES_DIR / m[0] for m in moves]
+                             + ([target_dir] if target_dir.exists() else []))
+
+    live = tmux_sessions()
+    kill = ["notes--{}".format(slug) for slug, _, _ in moves
+            if "notes--{}".format(slug) in live]
+
+    # --- report ---
+    print("target:  {}{}".format(target_dir,
+                                 "" if target_dir.exists() else "   (will be created)"))
+    print("")
+    print("moves")
+    for slug, sub, _ in moves:
+        extra = []
+        if (NOTES_DIR / slug / ".git").exists():
+            extra.append("own git repo")
+        tdir = HOME / ".claude/projects" / transcript_dir_for(slug)
+        if tdir.is_dir():
+            n = len(list(tdir.glob("*.jsonl")))
+            kb = sum(f.stat().st_size for f in tdir.glob("*.jsonl")) // 1024
+            extra.append("{} transcript(s), {} KB — stays at {}".format(
+                n, kb, tdir.name))
+        print("  {}/  ->  {}/{}/".format(slug, target, sub))
+        for e in extra:
+            print("      {}".format(e))
+    print("")
+
+    print("reference rewrites ({} file(s))".format(len(rewrites)))
+    if not rewrites:
+        print("  (none found)")
+    for path, hits, _ in rewrites:
+        try:
+            shown = "~/{}".format(path.relative_to(HOME))
+        except ValueError:
+            shown = str(path)
+        print("  {}".format(shown))
+        for lineno, before, after in hits[:4]:
+            print("      {}: {}".format(lineno, before))
+            print("      {}> {}".format(" " * len(str(lineno)), after))
+        if len(hits) > 4:
+            print("      … {} more line(s)".format(len(hits) - 4))
+    print("")
+
+    if kill:
+        print("tmux sessions to close")
+        for s in kill:
+            print("  {}".format(s))
+        print("")
+
+    if not args.apply:
+        print("dry run — nothing changed. Re-run with --apply.")
+        return 0
+
+    # --- apply ---
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    undo_dir = NOTES_DIR / ".merge-undo" / stamp
+    backups = undo_dir / "files"
+    backups.mkdir(parents=True, exist_ok=True)
+
+    # The undo script has to invert the steps in reverse order: some backed-up
+    # files live *inside* the dirs that move, so restoring a file before its
+    # dir is back would fail and (under set -e) abandon the rest of the undo.
+    undo_moves = []
+    undo_files = []
+    target_existed = target_dir.exists()
+    session_file = target_dir / ".session.json"
+    if session_file.is_file():
+        session_backup = backups / "target-session.json"
+        shutil.copy2(session_file, session_backup)
+        undo_files.append('cp "{}" "{}"'.format(session_backup, session_file))
+    else:
+        undo_files.append('rm -f "{}"'.format(session_file))
+
+    # Back up and rewrite references first: if this fails, nothing has moved.
+    for i, (path, _hits, new_text) in enumerate(rewrites):
+        backup = backups / "{:03d}-{}".format(i, path.name)
+        shutil.copy2(path, backup)
+        path.write_text(new_text, encoding="utf-8")
+        undo_files.append('cp "{}" "{}"'.format(backup, path))
+
+    for slug, sub, _ in moves:
+        src = NOTES_DIR / slug
+        dst = target_dir / sub
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        undo_moves.append('mv "{}" "{}"'.format(dst, src))
+
+    undo_lines = ["#!/bin/sh",
+                  "# Undo the notes-merge of {}".format(stamp),
+                  "# Moves first, then file contents: backups can live inside",
+                  "# the dirs being moved back.",
+                  "set -e"]
+    undo_lines += undo_moves
+    undo_lines += undo_files
+    if not target_existed:
+        # Only created by this merge, so take it away again -- but never
+        # forcibly: anything left in it is something this script did not put
+        # there, and is the user's.
+        undo_lines.append('rmdir "{}" 2>/dev/null || '
+                          'echo "left in place (not empty): {}"'
+                          .format(target_dir, target_dir))
+
+    # Provenance. Without this the absorbed transcripts are unreachable.
+    session = load_session(target_dir)
+    if not session:
+        session = {
+            "slug": target,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "topic": target,
+            "question": "",
+            "worktrees": [],
+            "wrapped_at": None,
+        }
+    absorbed = session.get("absorbed", [])
+    known = {a.get("slug") for a in absorbed}
+    for slug, sub, _ in moves:
+        if slug in known:
+            continue
+        prior = load_session(target_dir / sub)
+        absorbed.append({
+            "slug": slug,
+            "subdir": sub,
+            "transcript_dir": transcript_dir_for(slug),
+            "merged_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "question": prior.get("question", ""),
+        })
+    session["absorbed"] = absorbed
+    (target_dir / ".session.json").write_text(
+        json.dumps(session, indent=2) + "\n", encoding="utf-8")
+
+    for s in kill:
+        subprocess.run(["tmux", "kill-session", "-t", s],
+                       capture_output=True, timeout=10)
+
+    undo = undo_dir / "undo.sh"
+    undo.write_text("\n".join(undo_lines) + "\n", encoding="utf-8")
+    undo.chmod(0o755)
+
+    print("done. {} dir(s) merged, {} file(s) rewritten.".format(
+        len(moves), len(rewrites)))
+    print("undo:  {}".format(undo))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -24,6 +24,8 @@ Modes:
             rather than tucked away -- `notes playcount` has to be able to find
             a topic whose alias is GetEpisodePlayCount.
   --json    the whole index, for wip(1), notes-gc(1), and slash commands.
+  --redirects  `<old-slug>\t<current-slug>` for dirs absorbed by a merge.
+  --clusters   candidate merges, grouped by shared knowledge base topic.
 
 Env: NOTES_DIR (default ~/workspace/_notes)
      NOTES_KB  (default ~/workspace/notes-kb)
@@ -52,6 +54,16 @@ STOPWORDS = {
     "with", "why", "how", "what", "it", "its", "this", "that", "not", "no",
     "was", "were", "be", "been", "from", "at", "by", "as", "but", "we", "you",
 }
+
+
+def transcript_dir_for(slug):
+    """The Claude Code project dir that holds this scratch dir's transcripts.
+
+    Its name is derived from the path, so it does NOT follow a dir that gets
+    moved or merged. That is why a merge has to record it as provenance --
+    see notes-merge(1)."""
+    encoded = re.sub(r"[/_.]", "-", str(NOTES_DIR / slug).lstrip("/"))
+    return "-" + encoded
 
 
 def slug_from_transcript_dir(name):
@@ -326,6 +338,10 @@ def build():
                 "md": mds,
                 "transcripts": tc,
                 "transcript_kb": tkb,
+                "transcript_dir": transcript_dir_for(slug),
+                # Slugs merged into this dir. Their transcripts keep their old
+                # names forever, so this is the only way back to them.
+                "absorbed": session.get("absorbed", []),
                 "last_activity": int(last),
                 "age": age_label(last, now),
                 "empty": files == 0,
@@ -385,9 +401,15 @@ def emit_fzf(index):
         if d["empty"] and not d["transcripts"]:
             state = "empty"
         note = d["question"] or topics.get(d["topic"], {}).get("hook", "")
+        # Former names go in the alias column: after a merge, searching for the
+        # old dir name still has to find where the work went.
+        aliases = alias_column(d["topics"])
+        absorbed = ", ".join(a.get("slug", "") for a in d["absorbed"])
+        if absorbed:
+            aliases = "was: {}{}".format(absorbed, "; " + aliases if aliases else "")
         display = "  {:<{w}}  {:<{t}}  {:>5}  {:<9}  {:<46}  {}".format(
             elide(d["slug"], width), elide(topic, twidth), d["age"], state,
-            elide(note, 46), elide(alias_column(d["topics"]), 40),
+            elide(note, 46), elide(aliases, 40),
             w=width, t=twidth,
         )
         rows.append((display.rstrip(), d["slug"]))
@@ -405,12 +427,67 @@ def emit_fzf(index):
         print("{}\t{}".format(display, value))
 
 
+def emit_redirects(index):
+    """`<old-slug>\t<current-slug>` for every absorbed dir, so the shell can
+    send an old name straight to the dir that absorbed it."""
+    for d in index["dirs"]:
+        for a in d["absorbed"]:
+            slug = a.get("slug")
+            if slug:
+                print("{}\t{}".format(slug, d["slug"]))
+
+
+def emit_clusters(index):
+    """Candidate merges: scratch dirs that share a knowledge base topic.
+
+    A seed for notes-merge(1), not a verdict. The KB topic is the natural
+    target name -- it is already the durable subject, and merging into it makes
+    `_notes/` and `topics/` share one namespace. Dirs with no topic are listed
+    separately: they may belong to a cluster, but nothing here can say which."""
+    by_topic = {}
+    unrouted = []
+    for d in index["dirs"]:
+        if not d["topics"]:
+            if d["files"] or d["transcripts"]:
+                unrouted.append(d["slug"])
+            continue
+        for topic in d["topics"]:
+            by_topic.setdefault(topic, []).append(d["slug"])
+
+    clusters = []
+    for topic in sorted(by_topic):
+        members = sorted(set(by_topic[topic]))
+        if len(members) < 2:
+            continue
+        # A dir feeding several topics must not be merged on this evidence
+        # alone -- mp-in-udl feeds four, and belongs to none of them alone.
+        shared = sorted(
+            m for m in members
+            if len(next(d for d in index["dirs"] if d["slug"] == m)["topics"]) > 1
+        )
+        clusters.append({
+            "topic": topic,
+            "members": members,
+            "target_exists": any(d["slug"] == topic for d in index["dirs"]),
+            "ambiguous_members": shared,
+        })
+
+    clusters.sort(key=lambda c: -len(c["members"]))
+    json.dump({"clusters": clusters, "unrouted": sorted(unrouted)},
+              sys.stdout, indent=2)
+    sys.stdout.write("\n")
+
+
 def main():
     args = sys.argv[1:]
     mode = args[0] if args else "--json"
     index = build()
     if mode == "--fzf":
         emit_fzf(index)
+    elif mode == "--redirects":
+        emit_redirects(index)
+    elif mode == "--clusters":
+        emit_clusters(index)
     elif mode == "--json":
         json.dump(index, sys.stdout, indent=2)
         sys.stdout.write("\n")

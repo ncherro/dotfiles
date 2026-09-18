@@ -35,6 +35,7 @@
 : ${NOTES_KB:="$WORKSPACE/notes-kb"}
 : ${NOTES_BIN:="${DOTFILES:-$HOME/Projects/dotfiles}/bin"}
 : ${NOTES_CACHE:="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-workflows/notes-routing.tsv"}
+: ${NOTES_REDIRECTS:="${NOTES_CACHE:h}/notes-redirects.tsv"}
 
 # Repo whose worktrees are managed by `spt git:worktree` rather than plain git,
 # so they inherit sparse checkout and get a Bazel output base.
@@ -704,6 +705,9 @@ _notes_reindex() {
   mkdir -p "${NOTES_CACHE:h}" || return 1
   "$NOTES_BIN/notes-index" --fzf > "${NOTES_CACHE}.new" || return 1
   mv "${NOTES_CACHE}.new" "$NOTES_CACHE"
+  # Old names of dirs that notes-merge folded into another.
+  "$NOTES_BIN/notes-index" --redirects > "${NOTES_REDIRECTS}.new" \
+    && mv "${NOTES_REDIRECTS}.new" "$NOTES_REDIRECTS"
 }
 
 # Resolve a query to one of:
@@ -733,6 +737,20 @@ _notes_resolve() {
   fi
 
   _notes_cache_stale && { _notes_reindex || true }
+
+  # A name that notes-merge absorbed still has to land somewhere sensible --
+  # muscle memory outlives directory layout.
+  if [[ -s "$NOTES_REDIRECTS" ]]; then
+    local redirected
+    redirected=$(awk -F'\t' -v s="$slug" '$1 == s { print $2; exit }' \
+      "$NOTES_REDIRECTS")
+    if [[ -n "$redirected" && -d "${NOTES_DIR}/${redirected}" ]]; then
+      print -u2 -- "notes: ${slug} was merged into ${redirected}"
+      print -r -- "$redirected"
+      return
+    fi
+  fi
+
   if [[ ! -s "$NOTES_CACHE" ]]; then
     print -r -- "+create:${slug}"
     return
