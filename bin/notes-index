@@ -14,9 +14,15 @@ session metadata -- so the index is complete without a migration.
 
 Modes:
   --fzf     tab-separated rows for the notes(1) picker:
-              <display>\t<match-keywords>\t<value>
+              <display>\t<value>
             where <value> is a dir slug, or `+topic:<slug>` meaning "new dir
             tagged to this topic".
+
+            Everything searchable has to live in <display>: fzf matches against
+            the line as transformed by --with-nth, so a trailing hidden field is
+            invisible to the matcher. That is why aliases are a visible column
+            rather than tucked away -- `notes playcount` has to be able to find
+            a topic whose alias is GetEpisodePlayCount.
   --json    the whole index, for wip(1), notes-gc(1), and slash commands.
 
 Env: NOTES_DIR (default ~/workspace/_notes)
@@ -355,7 +361,19 @@ def emit_fzf(index):
 
     def elide(text, limit):
         text = re.sub(r"\s+", " ", strip_markup(str(text))).strip()
-        return text if len(text) <= limit else text[: limit - 1] + "…"
+        return text if len(text) <= limit else text[: limit - 1] + "\u2026"
+
+    def alias_column(topic_slugs):
+        """Aliases of the attached topics, minus anything already on the line."""
+        out, seen = [], set()
+        for t in topic_slugs:
+            for a in topics.get(t, {}).get("aliases", []):
+                key = a.lower()
+                if key in seen or key in {s.lower() for s in topic_slugs}:
+                    continue
+                seen.add(key)
+                out.append(a)
+        return ", ".join(out)
 
     rows = []
     for d in dirs:
@@ -367,31 +385,24 @@ def emit_fzf(index):
         if d["empty"] and not d["transcripts"]:
             state = "empty"
         note = d["question"] or topics.get(d["topic"], {}).get("hook", "")
-        display = "  {:<{w}}  {:<{t}}  {:>5}  {:<9}  {}".format(
+        display = "  {:<{w}}  {:<{t}}  {:>5}  {:<9}  {:<46}  {}".format(
             elide(d["slug"], width), elide(topic, twidth), d["age"], state,
-            elide(note, 60), w=width, t=twidth,
+            elide(note, 46), elide(alias_column(d["topics"]), 40),
+            w=width, t=twidth,
         )
-        match = " ".join(keywords(
-            d["slug"], d["question"],
-            " ".join(d["topics"]),
-            " ".join(topics.get(t, {}).get("hook", "") for t in d["topics"]),
-            " ".join(a for t in d["topics"]
-                     for a in topics.get(t, {}).get("aliases", [])),
-        ))
-        rows.append((display, match, d["slug"]))
+        rows.append((display.rstrip(), d["slug"]))
 
     for slug in sorted(topics):
         t = topics[slug]
-        display = "+ {:<{w}}  {:<{t}}  {:>5}  {:<9}  {}".format(
+        display = "+ {:<{w}}  {:<{t}}  {:>5}  {:<9}  {:<46}  {}".format(
             "new dir in topic", elide(slug, twidth), "", "[topic]",
-            elide(t["hook"], 60), w=width, t=twidth,
+            elide(t["hook"], 46), elide(alias_column([slug]), 40),
+            w=width, t=twidth,
         )
-        match = " ".join(keywords(slug, t["hook"], " ".join(t["aliases"]),
-                                  " ".join(t["tags"])))
-        rows.append((display, match, "+topic:" + slug))
+        rows.append((display.rstrip(), "+topic:" + slug))
 
-    for display, match, value in rows:
-        print("{}\t{}\t{}".format(display, match, value))
+    for display, value in rows:
+        print("{}\t{}".format(display, value))
 
 
 def main():

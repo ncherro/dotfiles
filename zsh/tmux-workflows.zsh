@@ -5,6 +5,16 @@
 #   source /path/to/tmux-workflows.zsh
 #
 # Prerequisites: tmux, git, gh (GitHub CLI), claude (for review-pr)
+#   jq        session/review metadata
+#   fzf       the notes picker
+#   python3   bin/notes-index, which joins the notes dirs to the knowledge base
+#
+# Workflows:
+#   notes <topic>        open or create an investigation, routed against the KB
+#   code <branch> -p …   start a coding session from one, in a linked worktree
+#   review-pr <url>      review a PR in its own tmux window
+#   wip                  what am I in the middle of
+#   notes-gc             prune notes dirs that hold nothing
 #
 # Optional:
 #   GWT_SPARSE_CHECKOUT_CMD — function or command to run after creating a
@@ -20,8 +30,18 @@
 : ${REVIEWS_DIR:="$NOTES_DIR/reviews"}
 : ${GWT_SPARSE_CHECKOUT_CMD:=""}
 
+# Knowledge base that `notes` routes against, and the helpers that read it.
+# Unset NOTES_KB to fall back to plain directory-name matching.
+: ${NOTES_KB:="$WORKSPACE/notes-kb"}
+: ${NOTES_BIN:="${DOTFILES:-$HOME/Projects/dotfiles}/bin"}
+: ${NOTES_CACHE:="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-workflows/notes-routing.tsv"}
+
+# Repo whose worktrees are managed by `spt git:worktree` rather than plain git,
+# so they inherit sparse checkout and get a Bazel output base.
+: ${MONOREPO_DIR:=""}
+
 # --- Dependency check ---
-for _twf_cmd in tmux git gh; do
+for _twf_cmd in tmux git gh jq fzf; do
   if ! command -v "$_twf_cmd" &>/dev/null; then
     echo "tmux-workflows: missing required command: $_twf_cmd" >&2
   fi
@@ -624,91 +644,177 @@ review-cleanup() {
 }
 
 # --- Workflow: Notes ---
+#
+# A notes dir carries `.session.json`, mirroring the `.review-meta.json` that
+# review-pr already writes. It is the join key between a scratch dir, the
+# worktrees that investigation spawned, and the knowledge base topic it
+# distills into. `notes-index` reads it; `code` and `/wrap` write to it.
 
-# Resolve a topic query to a notes dirname. Exact matches pass through;
-# fuzzy queries search existing dirs and offer fzf selection.
+# Normalize a free-text query into a directory name.
+_notes_slug() {
+  local s="${(L)*}"
+  s="${s//[^a-z0-9._-]/-}"
+  # Collapse separator runs and trim the ends: "distro api / episode status"
+  # should slug to distro-api-episode-status, not distro-api--episode-status.
+  while [[ "$s" == *--* ]]; do s="${s//--/-}"; done
+  s="${s#-}"
+  print -r -- "${s%-}"
+}
+
+_notes_session_init() {
+  local dir="$1" slug="$2" topic="$3" question="$4"
+  local meta="${dir}/.session.json"
+  [[ -f "$meta" ]] && return 0
+  command -v jq &>/dev/null || return 0
+  jq -n \
+    --arg slug "$slug" \
+    --arg created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg topic "$topic" \
+    --arg question "$question" \
+    '{slug: $slug, created: $created, topic: $topic, question: $question,
+      worktrees: [], wrapped_at: null}' > "$meta"
+}
+
+# Set one top-level field. Writes via a temp file: jq cannot edit in place.
+_notes_session_set() {
+  local dir="$1" key="$2" value="$3"
+  local meta="${dir}/.session.json"
+  [[ -f "$meta" ]] || return 1
+  command -v jq &>/dev/null || return 1
+  local tmp
+  tmp=$(jq --arg k "$key" --arg v "$value" '.[$k] = $v' "$meta") || return 1
+  printf '%s\n' "$tmp" > "$meta"
+}
+
+# The routing table is regenerated only when something it derives from has
+# changed -- python3 takes ~0.65s to start on a managed Mac, too slow to pay on
+# every invocation. The staleness check itself is pure zsh.
+_notes_cache_stale() {
+  [[ -s "$NOTES_CACHE" ]] || return 0
+  local f
+  for f in "$NOTES_DIR" "$NOTES_KB/index.md" "$NOTES_KB"/topics/*.md(N) \
+           "$NOTES_DIR"/*(/N) "$NOTES_DIR"/*/.session.json(N); do
+    [[ "$f" -nt "$NOTES_CACHE" ]] && return 0
+  done
+  return 1
+}
+
+_notes_reindex() {
+  [[ -x "$NOTES_BIN/notes-index" ]] || return 1
+  mkdir -p "${NOTES_CACHE:h}" || return 1
+  "$NOTES_BIN/notes-index" --fzf > "${NOTES_CACHE}.new" || return 1
+  mv "${NOTES_CACHE}.new" "$NOTES_CACHE"
+}
+
+# Resolve a query to one of:
+#   <slug>          an existing scratch dir
+#   +topic:<slug>   a new dir attached to that knowledge base topic
+#   +create:<slug>  a new, unattached dir
+#
+# Candidates come from notes-index, which matches against the KB's topic slugs,
+# frontmatter aliases and index hooks -- not just directory names. That is what
+# makes `notes episode metadata` find `analytics-episode-calls`.
 _notes_resolve() {
   local query="$*"
-  local slug="${(L)query// /-}"
+  local slug
+  slug=$(_notes_slug "$query")
+  [[ -n "$slug" ]] || return 1
 
-  # Exact match — use it directly
+  # An exact dir name is an answer, not a query. Never open a picker for it.
   if [[ -d "${NOTES_DIR}/${slug}" ]]; then
-    echo "$slug"
+    print -r -- "$slug"
     return
   fi
 
-  # No existing dirs — create without prompting
-  local -a existing=( "${NOTES_DIR}"/*(/:t) )
-  if (( ${#existing} == 0 )); then
-    echo "$slug"
+  # Degrade to the old behaviour when the index or fzf is unavailable.
+  if [[ ! -x "$NOTES_BIN/notes-index" ]] || ! command -v fzf &>/dev/null; then
+    print -r -- "+create:${slug}"
     return
   fi
 
-  # Score existing dirs by word overlap with the query
-  local -a query_words=( ${(s:-:)slug} )
-  local -a scored=()  # "score:dirname" pairs
-  local d w hits best=0
-  for d in "${existing[@]}"; do
-    hits=0
-    for w in "${query_words[@]}"; do
-      [[ "$d" == *"$w"* ]] && (( hits++ ))
-    done
-    if (( hits > 0 )); then
-      scored+=( "${hits}:${d}" )
-      (( hits > best )) && best=$hits
-    fi
-  done
-
-  # If only single-word matches and there are many, keep only those
-  # with the longest matching word to reduce noise
-  local -a candidates=()
-  if (( best >= 2 )); then
-    # Keep dirs with 2+ word hits
-    for entry in "${scored[@]}"; do
-      (( ${entry%%:*} >= 2 )) && candidates+=( "${entry#*:}" )
-    done
-  else
-    # All matches are 1-word; include them all (fzf will rank)
-    for entry in "${scored[@]}"; do
-      candidates+=( "${entry#*:}" )
-    done
-  fi
-
-  if (( ${#candidates} == 0 )); then
-    echo "$slug"
+  _notes_cache_stale && { _notes_reindex || true }
+  if [[ ! -s "$NOTES_CACHE" ]]; then
+    print -r -- "+create:${slug}"
     return
   fi
-
-  candidates=( ${(o)candidates} )
-  candidates+=( "+ create: ${slug}" )
 
   local pick
-  pick=$( printf '%s\n' "${candidates[@]}" \
-    | fzf --height=~15 --reverse --prompt="notes> " \
-           --query="$slug" --select-1 --exit-0 \
-           --header="Pick an existing dir or create new" )
+  pick=$(
+    {
+      cat "$NOTES_CACHE"
+      printf '+ %-30s %-26s %5s  %-9s %s\t%s\n' \
+        "create unattached dir" "$slug" "" "[new]" \
+        "no knowledge base topic — /wrap will route it later" \
+        "+create:${slug}"
+    } | fzf --height=~20 --reverse \
+            --delimiter=$'\t' --with-nth=1 \
+            --query="$query" --select-1 --exit-0 \
+            --prompt='notes> ' \
+            --header='enter: open · a [topic] row starts a new dir under that topic' \
+            --preview="'$NOTES_BIN/notes-preview' {2}" \
+            --preview-window='right,52%,wrap,border-left'
+  ) || return 1
 
-  [[ -z "$pick" ]] && return 1
-
-  if [[ "$pick" == "+ create: "* ]]; then
-    echo "$slug"
-  else
-    echo "$pick"
-  fi
+  [[ -n "$pick" ]] || return 1
+  print -r -- "${pick##*$'\t'}"
 }
 
 # Open a notes directory in a dedicated tmux session
+#
+# Usage:
+#   notes <topic>                       resolve against the KB, open or create
+#   notes <topic> -q "<question>"       record what the session is actually asking
+#   notes <topic> -t <kb-topic>         attach to a KB topic explicitly
+#   notes --reindex                     rebuild the routing table now
 notes() {
+  local question="" topic=""
+  local -a positional
+  positional=()
+  while (( $# )); do
+    case "$1" in
+      -q|--question)
+        if [[ -z "$2" ]]; then echo "notes: -q requires a value"; return 1; fi
+        question="$2"; shift 2 ;;
+      -t|--topic)
+        if [[ -z "$2" ]]; then echo "notes: -t requires a value"; return 1; fi
+        topic="$2"; shift 2 ;;
+      --reindex)
+        _notes_reindex && echo "notes: reindexed $NOTES_CACHE"
+        return ;;
+      *)
+        positional+=("$1"); shift ;;
+    esac
+  done
+  set -- "${positional[@]}"
+
   if [[ -z "$*" ]]; then
-    echo "Usage: notes <topic>"
+    echo "Usage: notes <topic> [-q \"<question>\"] [-t <kb-topic>]"
+    echo "       notes --reindex"
     return 1
   fi
 
-  local dirname
-  dirname=$(_notes_resolve "$@") || return 1
+  local resolved dirname
+  resolved=$(_notes_resolve "$@") || return 1
+
+  case "$resolved" in
+    +topic:*)
+      # New dir named from the query, attached to the chosen KB topic.
+      topic="${resolved#+topic:}"
+      dirname=$(_notes_slug "$@") ;;
+    +create:*)
+      dirname="${resolved#+create:}" ;;
+    *)
+      dirname="$resolved" ;;
+  esac
+  [[ -n "$dirname" ]] || return 1
 
   local dir="${NOTES_DIR}/${dirname}"
-  mkdir -p "$dir"
+  mkdir -p "$dir" || return 1
+
+  _notes_session_init "$dir" "$dirname" "$topic" "$question"
+  # -q/-t given for a dir that already exists should update it, not be dropped.
+  [[ -n "$question" ]] && _notes_session_set "$dir" question "$question"
+  [[ -n "$topic" ]] && _notes_session_set "$dir" topic "$topic"
 
   local session="notes--${dirname}"
 
@@ -721,6 +827,378 @@ notes() {
   else
     tmux attach-session -t "$session"
   fi
+}
+
+# Prune notes dirs that hold nothing, and report the ones that only look empty
+#
+# `notes <topic>` creates a dir eagerly, so a session that wrote no files still
+# leaves one behind -- and its name then pollutes every future match. A dir with
+# no files but a substantial transcript is the opposite problem: real work that
+# was never distilled. Those are listed, never deleted.
+notes-gc() {
+  local dry=0
+  [[ "$1" == "--dry-run" || "$1" == "-n" ]] && dry=1
+
+  if [[ ! -x "$NOTES_BIN/notes-index" ]] || ! command -v jq &>/dev/null; then
+    echo "notes-gc: needs notes-index and jq"
+    return 1
+  fi
+
+  local index
+  index=$("$NOTES_BIN/notes-index" --json) || return 1
+
+  # Three buckets. Only the first is ever deleted.
+  #   prunable    -- nothing on disk, no transcript, and the KB does not
+  #                  reference it. There is nothing to lose but the name.
+  #   dangling    -- empty, but a KB **Scratch:** line points here. Removing it
+  #                  would silently break that pointer, so report it instead and
+  #                  let /kb-tidy decide.
+  #   recoverable -- empty on disk but the transcript is substantial: real work
+  #                  that was never distilled.
+  local -a prunable dangling recoverable
+  prunable=( ${(f)"$(print -r -- "$index" | jq -r '
+    .dirs[]
+    | select(.files == 0 and .transcripts == 0 and (.topics | length) == 0)
+    | .slug')"} )
+  dangling=( ${(f)"$(print -r -- "$index" | jq -r '
+    .dirs[]
+    | select(.files == 0 and .transcripts == 0 and (.topics | length) > 0)
+    | "\(.slug)\t\(.topics | join(", "))"')"} )
+  recoverable=( ${(f)"$(print -r -- "$index" | jq -r '
+    .dirs[]
+    | select(.files == 0 and .transcripts > 0 and .wrapped == false)
+    | "\(.slug)\t\(.transcript_kb) KB\t\(.age)"')"} )
+
+  if (( ${#dangling} )); then
+    echo "Empty, but a knowledge base topic points here:"
+    printf '  %s\n' "${dangling[@]}" | column -t -s $'\t'
+    echo "  → left alone; /kb-tidy marks dead scratch paths"
+    echo ""
+  fi
+
+  if (( ${#recoverable} )); then
+    echo "Never distilled, and the transcript is the only artifact:"
+    printf '  %s\n' "${recoverable[@]}" | column -t -s $'\t'
+    echo "  → claude --resume in the dir, or /wrap --recover <slug>"
+    echo ""
+  fi
+
+  if (( ! ${#prunable} )); then
+    echo "Nothing to prune"
+    return 0
+  fi
+
+  echo "Empty, no transcript, safe to remove (${#prunable}):"
+  printf '  %s\n' "${prunable[@]}"
+  echo ""
+
+  if (( dry )); then
+    echo "(dry run — nothing removed)"
+    return 0
+  fi
+
+  read -q "?Remove ${#prunable} dir(s)? [y/N] " || { echo; return 0 }
+  echo ""
+  local slug
+  for slug in "${prunable[@]}"; do
+    # Refuse to touch anything that is not actually empty.
+    if [[ -n "$(find "${NOTES_DIR}/${slug}" -type f ! -name '.DS_Store' \
+                     ! -name '.session.json' -print -quit 2>/dev/null)" ]]; then
+      echo "  skipped ${slug} (not empty)"
+      continue
+    fi
+    tmux kill-session -t "notes--${slug}" 2>/dev/null
+    rm -rf "${NOTES_DIR}/${slug}"
+    echo "  removed ${slug}"
+  done
+  _notes_reindex
+}
+
+# --- Workflow: notes -> code handoff ---
+
+# Resolve the notes dir for the current directory, if we are in one.
+_notes_current_slug() {
+  local dir="${PWD:A}" root="${NOTES_DIR:A}"
+  [[ "$dir" == "$root"/* ]] || return 1
+  local rest="${dir#$root/}"
+  print -r -- "${rest%%/*}"
+}
+
+# Start a coding session from an investigation
+#
+# Creates a worktree, opens a detached tmux session with Claude Code already
+# running, and links the two directions: the worktree gets the notes dir via
+# --add-dir (so the coding session can read the investigation that produced it),
+# and the notes dir records the worktree in .session.json.
+#
+# Usage, from inside a notes dir:
+#   code <branch>                          worktree + tmux, no prompt
+#   code <branch> -p "<task>"              + start Claude on the task
+#   code <branch> -p "<task>" --safer      + auto-accept edits
+#   code <branch> -p "<task>" --yolo       + skip all permission prompts
+#   code <branch> -c <component> ...       monorepo: sparse-checkout components
+#   code <branch> --repo <name>            repo under $WORKSPACE (default: monorepo)
+#   code <branch> --notes <slug>           run from anywhere
+code() {
+  local branch="" prompt="" mode="" model="" repo="" notes_slug=""
+  local -a components
+  components=()
+  local -a positional
+  positional=()
+
+  while (( $# )); do
+    case "$1" in
+      -p|--prompt)
+        if [[ -z "$2" ]]; then echo "code: -p requires a value"; return 1; fi
+        prompt="$2"; shift 2 ;;
+      -c|--component)
+        if [[ -z "$2" ]]; then echo "code: -c requires a value"; return 1; fi
+        components+=("$2"); shift 2 ;;
+      --repo)
+        if [[ -z "$2" ]]; then echo "code: --repo requires a value"; return 1; fi
+        repo="$2"; shift 2 ;;
+      --notes)
+        if [[ -z "$2" ]]; then echo "code: --notes requires a value"; return 1; fi
+        notes_slug="$2"; shift 2 ;;
+      --model)
+        if [[ -z "$2" ]]; then echo "code: --model requires a value"; return 1; fi
+        model="$2"; shift 2 ;;
+      --safer) mode="safer"; shift ;;
+      --yolo)  mode="bypass"; shift ;;
+      *) positional+=("$1"); shift ;;
+    esac
+  done
+  set -- "${positional[@]}"
+  branch="$1"
+
+  if [[ -z "$branch" ]]; then
+    echo "Usage: code <branch> [-p \"<task>\"] [-c <component>] [--repo <name>]"
+    echo "                     [--notes <slug>] [--safer|--yolo] [--model <m>]"
+    return 1
+  fi
+
+  # Which investigation is this coding session coming out of?
+  if [[ -z "$notes_slug" ]]; then
+    notes_slug=$(_notes_current_slug) || {
+      echo "code: not inside $NOTES_DIR — pass --notes <slug>"
+      return 1
+    }
+  fi
+  local notes_dir="${NOTES_DIR}/${notes_slug}"
+  if [[ ! -d "$notes_dir" ]]; then
+    echo "code: no such notes dir: $notes_dir"
+    return 1
+  fi
+
+  # Which repo? Explicit flag, then the last repo this investigation used,
+  # then the monorepo.
+  local repo_root=""
+  if [[ -n "$repo" ]]; then
+    repo_root="${WORKSPACE}/${repo}"
+  else
+    if [[ -f "$notes_dir/.session.json" ]] && command -v jq &>/dev/null; then
+      local remembered
+      remembered=$(jq -r '(.worktrees // []) | last | .repo // empty' \
+        "$notes_dir/.session.json" 2>/dev/null)
+      [[ -n "$remembered" ]] && repo_root="${WORKSPACE}/${remembered}"
+    fi
+    [[ -z "$repo_root" && -n "$MONOREPO_DIR" ]] && repo_root="${MONOREPO_DIR:A}"
+  fi
+
+  if [[ -z "$repo_root" || ! -d "$repo_root/.git" ]]; then
+    echo "code: no repo resolved (tried '${repo_root:-<none>}')"
+    echo "      pass --repo <name> or set MONOREPO_DIR"
+    return 1
+  fi
+
+  local repo_name="${repo_root:t}"
+  local dest session_name
+  session_name="${repo_name}--${branch//\//-}"
+  session_name=${session_name//./-}
+
+  # The monorepo's worktrees need sparse-checkout inheritance and a Bazel
+  # output base, which only `spt git:worktree` sets up.
+  local is_monorepo=0
+  [[ -n "$MONOREPO_DIR" && "$repo_root" == "${MONOREPO_DIR:A}" ]] && is_monorepo=1
+
+  if (( is_monorepo )); then
+    dest="${repo_root}/.worktrees/${branch//\//-}"
+  else
+    dest="${WORKTREES_DIR}/${repo_name}--${branch//\//-}"
+  fi
+
+  if [[ -d "$dest" ]]; then
+    echo "code: worktree already exists: $dest"
+  elif (( is_monorepo )); then
+    local -a spt_args
+    spt_args=( git:worktree add "$branch" "$dest" )
+    local c
+    for c in "${components[@]}"; do spt_args+=( -c "$c" ); done
+    ( cd "$repo_root" && spt "${spt_args[@]}" ) || return 1
+  else
+    ( cd "$repo_root" && git worktree add -b "$branch" "$dest" \
+        "$(cd "$repo_root" && _git_default_branch)" ) || return 1
+    [[ ! -f "$repo_root/.env" ]] || cp "$repo_root/.env" "$dest/.env"
+  fi
+
+  # Link the worktree back to the investigation, for /wrap from either side.
+  # Excluded locally rather than via .gitignore: it is per-worktree state, and
+  # without this every linked worktree would read as dirty in wip(1).
+  print -r -- "$notes_dir" > "$dest/.notes-link"
+  local exclude_file
+  exclude_file="$(git -C "$dest" rev-parse --git-path info/exclude 2>/dev/null)"
+  if [[ -n "$exclude_file" ]]; then
+    mkdir -p "${exclude_file:h}"
+    grep -qxF '.notes-link' "$exclude_file" 2>/dev/null \
+      || print -r -- '.notes-link' >> "$exclude_file"
+  fi
+
+  # ...and the investigation forward to the worktree. Every dir that predates
+  # session metadata has no .session.json, so create it rather than silently
+  # dropping the link.
+  _notes_session_init "$notes_dir" "$notes_slug" "" ""
+  if [[ -f "$notes_dir/.session.json" ]] && command -v jq &>/dev/null; then
+    local tmp
+    tmp=$(jq \
+      --arg repo "$repo_name" \
+      --arg branch "$branch" \
+      --arg path "$dest" \
+      --arg tmux "$session_name" \
+      --arg created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '.worktrees = ((.worktrees // [])
+         | map(select(.branch != $branch))
+         + [{repo: $repo, branch: $branch, path: $path, tmux: $tmux,
+             created: $created}])' \
+      "$notes_dir/.session.json") \
+      && printf '%s\n' "$tmp" > "$notes_dir/.session.json"
+  fi
+
+  if ! tmux has-session -t "$session_name" 2>/dev/null; then
+    tmux new-session -d -s "$session_name" -c "$dest"
+  fi
+
+  if [[ -z "$prompt" ]]; then
+    echo "Worktree: $dest"
+    echo "Notes:    $notes_dir"
+    echo "Tmux:     $session_name (detached) — tatt $session_name"
+    return 0
+  fi
+
+  # Read the prompt from a file if it points at one, matching gwt.
+  local prompt_text="$prompt"
+  [[ -f "$prompt" ]] && prompt_text=$(<"$prompt")
+
+  # Pass the prompt through a temp file so it needs no tmux send-keys escaping.
+  local tmpfile
+  tmpfile=$(mktemp -t "code-prompt-XXXXXX") || return 1
+  {
+    print -r -- "This coding session comes out of an investigation. Its notes are in"
+    print -r -- "${notes_dir} (available to you via --add-dir). Read what is"
+    print -r -- "relevant there before starting — do not re-derive it."
+    print -r -- ""
+    print -r -- "Task:"
+    print -r -- "$prompt_text"
+  } > "$tmpfile"
+
+  local claude_flags="--add-dir ${(q)notes_dir}"
+  case "$mode" in
+    bypass) claude_flags+=" --dangerously-skip-permissions" ;;
+    safer)  claude_flags+=" --permission-mode acceptEdits" ;;
+  esac
+  [[ -n "$model" ]] && claude_flags+=" --model $model"
+
+  tmux send-keys -t "$session_name" \
+    "claude ${claude_flags} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
+
+  echo "Worktree: $dest"
+  echo "Notes:    $notes_dir  (linked via --add-dir)"
+  echo "Tmux:     $session_name (detached) — tatt $session_name"
+}
+
+# --- Workflow: what am I in the middle of? ---
+
+# One screen: live notes sessions, worktrees and what they came from, and
+# anything never distilled. Reviews have their own status command; this counts
+# them and points at it rather than re-running dozens of API calls.
+wip() {
+  if [[ ! -x "$NOTES_BIN/notes-index" ]] || ! command -v jq &>/dev/null; then
+    echo "wip: needs notes-index and jq"
+    return 1
+  fi
+
+  local index
+  index=$("$NOTES_BIN/notes-index" --json) || return 1
+
+  local -a live
+  live=( ${(f)"$(tmux ls -F '#{session_name}' 2>/dev/null)"} )
+
+  local -a rows
+  rows=( ${(f)"$(print -r -- "$index" | jq -r '
+    .dirs[]
+    | select(.last_activity > (now - 86400 * 21) or .wrapped == false)
+    | select(.files > 0 or .transcripts > 0)
+    | [.slug, (.topic // "-"), .age, (if .wrapped then "" else "UNWRAPPED" end)]
+    | @tsv')"} )
+
+  echo "notes"
+  if (( ! ${#rows} )); then
+    echo "  (nothing recent)"
+  else
+    local row slug rest marker
+    for row in "${rows[@]}"; do
+      slug="${row%%	*}"
+      marker="  "
+      (( ${live[(I)notes--$slug]} )) && marker="⚡"
+      printf '%s %s\n' "$marker" "$row"
+    done | column -t -s $'\t'
+  fi
+  echo ""
+
+  echo "worktrees"
+  local -a wt_lines
+  wt_lines=()
+  local -a repos
+  repos=()
+  [[ -n "$MONOREPO_DIR" && -d "$MONOREPO_DIR" ]] && repos+=( "${MONOREPO_DIR:A}" )
+  local d
+  for d in "$WORKTREES_DIR"/*(/N); do
+    git -C "$d" rev-parse --git-dir &>/dev/null && wt_lines+=( "$d" )
+  done
+  local r
+  for r in "${repos[@]}"; do
+    for d in "$r"/.worktrees/*(/N); do wt_lines+=( "$d" ); done
+  done
+
+  if (( ! ${#wt_lines} )); then
+    echo "  (none)"
+  else
+    local -a out
+    out=()
+    for d in "${wt_lines[@]}"; do
+      local br note state sess repo_of
+      br=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue
+      repo_of=$(basename "$(dirname "$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)")")
+      note="-"
+      [[ -f "$d/.notes-link" ]] && note="${$(<"$d/.notes-link"):t}"
+      state=""
+      if git -C "$d" merge-base --is-ancestor HEAD origin/HEAD 2>/dev/null; then
+        state="merged"
+      elif [[ -n "$(git -C "$d" status --porcelain 2>/dev/null)" ]]; then
+        state="dirty"
+      fi
+      sess="${repo_of}--${br//\//-}"
+      sess=${sess//./-}
+      local marker="  "
+      (( ${live[(I)$sess]} )) && marker="⚡"
+      out+=( "${marker}	${repo_of}	${br}	${note}	${state}" )
+    done
+    printf '%s\n' "${out[@]}" | column -t -s $'\t'
+  fi
+  echo ""
+
+  local -a review_dirs
+  review_dirs=( "$REVIEWS_DIR"/*(/N) )
+  echo "reviews: ${#review_dirs} tracked — run review-status for detail"
 }
 
 # --- Tab completion ---
