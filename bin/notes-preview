@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# fzf preview for the notes(1) picker.
+#
+# Usage: notes-preview <value>
+#   <value> is the third field of a notes-index --fzf row:
+#     <slug>          an existing scratch dir
+#     +topic:<slug>   a knowledge base topic
+#     +create:<slug>  a dir that does not exist yet
+#
+# Deliberately shell-only. fzf re-runs this on every selection change, and
+# python3 takes ~0.65s to start on a managed Mac.
+
+set -uo pipefail
+
+: "${NOTES_DIR:="$HOME/workspace/_notes"}"
+: "${NOTES_KB:="$HOME/workspace/notes-kb"}"
+
+value="${1:-}"
+[ -n "$value" ] || exit 0
+
+show_topic() {
+  local slug="$1" file="$NOTES_KB/topics/$1.md"
+  if [ ! -f "$file" ]; then
+    echo "topic: $slug  (no file yet)"
+    grep -F "[[$slug]]" "$NOTES_KB/index.md" 2>/dev/null | head -3
+    return
+  fi
+  echo "── $NOTES_KB/topics/$slug.md"
+  # Header block: everything up to the first dated entry.
+  awk '/^## /{exit} {print}' "$file" | grep -v '^---$' | grep -v '^$'
+  echo
+  echo "── entries"
+  grep '^## ' "$file" | head -6
+}
+
+case "$value" in
+  +topic:*)
+    show_topic "${value#+topic:}"
+    ;;
+  +create:*)
+    slug="${value#+create:}"
+    echo "new scratch dir: $NOTES_DIR/$slug"
+    echo
+    echo "No knowledge base topic attached. /wrap will route it at the end,"
+    echo "or pick a [topic] row instead to attach it now."
+    ;;
+  *)
+    dir="$NOTES_DIR/$value"
+    echo "── $dir"
+    if [ -f "$dir/.session.json" ] && command -v jq >/dev/null 2>&1; then
+      jq -r '
+        (if .question != "" and .question != null then "question: " + .question else empty end),
+        (if .topic  != "" and .topic  != null then "topic:    " + .topic  else empty end),
+        (if .wrapped_at then "wrapped:  " + .wrapped_at else "wrapped:  no" end),
+        (.worktrees // [] | .[] | "worktree: " + .branch + "  (" + (.repo // "?") + ")")
+      ' "$dir/.session.json" 2>/dev/null
+      echo
+    fi
+    # Topics whose Scratch line points here.
+    if [ -d "$NOTES_KB/topics" ]; then
+      hits=$(grep -l "_notes/$value/" "$NOTES_KB/topics"/*.md 2>/dev/null \
+        | xargs -n1 basename 2>/dev/null | sed 's/\.md$//' | tr '\n' ' ')
+      [ -n "$hits" ] && { echo "kb topics: $hits"; echo; }
+    fi
+    # A session whose only artifact is the transcript looks empty on disk but
+    # is not: it is a /wrap --recover candidate.
+    proj="$HOME/.claude/projects/-$(echo "${NOTES_DIR#/}" | tr '/_.' '-')-$value"
+    if [ -d "$proj" ]; then
+      n=$(find "$proj" -name '*.jsonl' | wc -l | tr -d ' ')
+      kb=$(du -sk "$proj" 2>/dev/null | cut -f1)
+      echo "transcripts: $n session(s), ${kb} KB"
+      echo
+    fi
+    echo "── files"
+    find "$dir" -maxdepth 2 \
+      \( -name node_modules -o -name .git \) -prune -o \
+      -type f ! -name '.DS_Store' ! -name '.session.json' -print0 2>/dev/null \
+      | xargs -0 ls -lt 2>/dev/null \
+      | awk -v p="$dir/" '{ $1=$2=$3=$4=$5=""; sub(/^ +/,""); sub(p,""); print }' \
+      | head -15
+    ;;
+esac
