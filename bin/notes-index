@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""Join the notes scratch dirs, their session metadata, and the knowledge base
+into one index.
+
+The knowledge base at $NOTES_KB is the curated routing table: `index.md` holds a
+one-line hook per topic, each `topics/<slug>.md` holds frontmatter aliases and a
+`**Scratch:**` line pointing at the scratch dirs that fed it. None of that was
+reachable from the shell, so `notes <query>` could only match directory names.
+This script makes it reachable.
+
+Nothing here writes. It reads the KB, reads `.session.json` where present, and
+falls back to the KB's own `**Scratch:**` pointers for the dirs that predate
+session metadata -- so the index is complete without a migration.
+
+Modes:
+  --fzf     tab-separated rows for the notes(1) picker:
+              <display>\t<match-keywords>\t<value>
+            where <value> is a dir slug, or `+topic:<slug>` meaning "new dir
+            tagged to this topic".
+  --json    the whole index, for wip(1), notes-gc(1), and slash commands.
+
+Env: NOTES_DIR (default ~/workspace/_notes)
+     NOTES_KB  (default ~/workspace/notes-kb)
+"""
+
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+NOTES_DIR = Path(os.environ.get("NOTES_DIR", HOME / "workspace/_notes"))
+NOTES_KB = Path(os.environ.get("NOTES_KB", HOME / "workspace/notes-kb"))
+PROJECTS_DIR = HOME / ".claude/projects"
+
+# Scratch dirs that are not investigations.
+SKIP_DIRS = {"reviews"}
+
+PRUNE = {"node_modules", ".git", ".venv", "__pycache__", "target", "dist"}
+MAX_DEPTH = 2
+
+STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "in", "to", "for", "is", "are", "on",
+    "with", "why", "how", "what", "it", "its", "this", "that", "not", "no",
+    "was", "were", "be", "been", "from", "at", "by", "as", "but", "we", "you",
+}
+
+
+def slug_from_transcript_dir(name):
+    """`-Users-nicholash-workspace--notes-mp-in-udl` -> `mp-in-udl`."""
+    prefix = "-" + str(NOTES_DIR).lstrip("/").replace("/", "-") + "-"
+    if name.startswith(prefix):
+        return name[len(prefix):]
+    return None
+
+
+def transcript_stats():
+    """slug -> (jsonl count, total KB, newest mtime). Sessions whose only
+    artifact is the transcript still count as activity."""
+    out = {}
+    if not PROJECTS_DIR.is_dir():
+        return out
+    for entry in os.scandir(PROJECTS_DIR):
+        if not entry.is_dir():
+            continue
+        slug = slug_from_transcript_dir(entry.name)
+        if not slug:
+            continue
+        count = 0
+        total = 0
+        newest = 0.0
+        for f in os.scandir(entry.path):
+            if not f.name.endswith(".jsonl"):
+                continue
+            st = f.stat()
+            count += 1
+            total += st.st_size
+            newest = max(newest, st.st_mtime)
+        if count:
+            out[slug] = (count, total // 1024, newest)
+    return out
+
+
+def walk_dir(path):
+    """(file count, md count, newest mtime) under path, pruned and depth-capped.
+    `_notes/` holds vendored node_modules; a naive walk is unusably slow."""
+    files = mds = 0
+    newest = 0.0
+    stack = [(path, 0)]
+    while stack:
+        current, depth = stack.pop()
+        try:
+            entries = list(os.scandir(current))
+        except OSError:
+            continue
+        for e in entries:
+            if e.is_dir(follow_symlinks=False):
+                if e.name not in PRUNE and depth < MAX_DEPTH:
+                    stack.append((e.path, depth + 1))
+                continue
+            if e.name == ".DS_Store":
+                continue
+            try:
+                st = e.stat()
+            except OSError:
+                continue
+            files += 1
+            if e.name.endswith(".md"):
+                mds += 1
+            newest = max(newest, st.st_mtime)
+    return files, mds, newest
+
+
+def parse_frontmatter(text):
+    """Return the raw YAML frontmatter block, or ''. Not a YAML parser -- the KB
+    only uses flat `key: value` and inline lists."""
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\n---", 3)
+    return text[3:end] if end != -1 else ""
+
+
+def parse_inline_list(value):
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+    return [v.strip().strip('"').strip("'") for v in value.split(",") if v.strip()]
+
+
+def parse_scratch(text):
+    """Scratch dirs from the `**Scratch:**` block only.
+
+    The block is one line plus any continuation lines up to the next blank line
+    (CONVENTIONS allows it to wrap). Scanning the whole file instead would map
+    any dir a topic merely *mentions* -- which silently mis-routed
+    `analytics-episode-calls` to `monorepo-migration`."""
+    lines = text.splitlines()
+    block = []
+    for i, line in enumerate(lines):
+        if not line.startswith("**Scratch:**"):
+            continue
+        block.append(line)
+        for cont in lines[i + 1:]:
+            if not cont.strip() or cont.startswith(("**", "#", "---")):
+                break
+            block.append(cont)
+        break
+
+    scratch = []
+    for m in re.finditer(r"_notes/([A-Za-z0-9._-]+)", " ".join(block)):
+        d = m.group(1).rstrip(".")
+        if d not in scratch and d not in SKIP_DIRS:
+            scratch.append(d)
+    return scratch
+
+
+def read_kb():
+    """topics: slug -> {hook, aliases, tags, scratch, updated}"""
+    topics = {}
+
+    index = NOTES_KB / "index.md"
+    hooks = {}
+    if index.is_file():
+        for line in index.read_text(encoding="utf-8", errors="replace").splitlines():
+            # - [[slug]] — hook   /   - [Title](topics/slug.md) — hook
+            m = re.match(r"\s*-\s*\[\[([^\]]+)\]\]\s*[—-]?\s*(.*)", line)
+            if not m:
+                m = re.match(r"\s*-\s*\[[^\]]*\]\(topics/([^).]+)\.md\)\s*[—-]?\s*(.*)", line)
+            if m:
+                hooks[m.group(1).strip()] = m.group(2).strip()
+
+    topics_dir = NOTES_KB / "topics"
+    if topics_dir.is_dir():
+        for f in sorted(topics_dir.glob("*.md")):
+            slug = f.stem
+            text = f.read_text(encoding="utf-8", errors="replace")
+            fm = parse_frontmatter(text)
+            aliases, tags, updated = [], [], ""
+            for line in fm.splitlines():
+                if line.startswith("aliases:"):
+                    aliases = parse_inline_list(line.split(":", 1)[1])
+                elif line.startswith("tags:"):
+                    tags = parse_inline_list(line.split(":", 1)[1])
+                elif line.startswith("updated:"):
+                    updated = line.split(":", 1)[1].strip()
+
+            scratch = parse_scratch(text)
+
+            # Fall back to the first prose line when the index has no hook.
+            hook = hooks.get(slug, "")
+            if not hook:
+                for line in text.splitlines():
+                    if line.startswith("**What this is:**"):
+                        hook = line.replace("**What this is:**", "").strip()
+                        break
+
+            topics[slug] = {
+                "hook": hook,
+                "aliases": aliases,
+                "tags": tags,
+                "scratch": scratch,
+                "updated": updated,
+            }
+
+    # A topic can be listed in index.md before its file exists.
+    for slug, hook in hooks.items():
+        topics.setdefault(slug, {
+            "hook": hook, "aliases": [], "tags": [], "scratch": [], "updated": "",
+        })
+
+    return topics
+
+
+def read_session(dir_path):
+    f = dir_path / ".session.json"
+    if not f.is_file():
+        return {}
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def strip_markup(text):
+    """Flatten a KB hook into bare words for matching."""
+    text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"[`*_#|]", " ", text)
+    return text
+
+
+def keywords(*parts):
+    words = []
+    seen = set()
+    for part in parts:
+        if not part:
+            continue
+        for w in re.split(r"[^A-Za-z0-9]+", strip_markup(str(part)).lower()):
+            if len(w) < 2 or w in STOPWORDS or w in seen:
+                continue
+            seen.add(w)
+            words.append(w)
+    return words
+
+
+def age_label(mtime, now):
+    if not mtime:
+        return "-"
+    days = int((now - mtime) // 86400)
+    if days <= 0:
+        return "today"
+    if days == 1:
+        return "1d"
+    if days < 14:
+        return f"{days}d"
+    if days < 60:
+        return f"{days // 7}w"
+    return f"{days // 30}mo"
+
+
+def build():
+    now = time.time()
+    topics = read_kb()
+    transcripts = transcript_stats()
+
+    # dir -> [topics], from the KB's own Scratch pointers. This is what lets the
+    # index cover dirs that have no .session.json yet. One scratch dir routinely
+    # feeds several topics (mp-in-udl feeds four), so this is a list.
+    dir_topic = {}
+    for slug in sorted(topics):
+        for d in topics[slug]["scratch"]:
+            dir_topic.setdefault(d, []).append(slug)
+
+    dirs = []
+    seen_dirs = set()
+    if NOTES_DIR.is_dir():
+        for entry in sorted(os.scandir(NOTES_DIR), key=lambda e: e.name):
+            if not entry.is_dir(follow_symlinks=False) or entry.name.startswith("."):
+                continue
+            if entry.name in SKIP_DIRS:
+                continue
+            slug = entry.name
+            seen_dirs.add(slug)
+            path = Path(entry.path)
+            session = read_session(path)
+            files, mds, newest = walk_dir(path)
+            tc, tkb, tmtime = transcripts.get(slug, (0, 0, 0.0))
+            last = max(newest, tmtime, entry.stat().st_mtime)
+
+            kb_topics = dir_topic.get(slug, [])
+            # Freshest topic first, so the primary slot is the one still active.
+            topic_list = sorted(
+                kb_topics, key=lambda t: topics[t].get("updated", ""), reverse=True
+            )
+            declared = session.get("topic")
+            if declared:
+                # .session.json wins the primary slot; it is set at routing time.
+                topic_list = [declared] + [t for t in topic_list if t != declared]
+
+            # A dir the KB points at has been distilled, even with no metadata.
+            wrapped_at = session.get("wrapped_at") or ""
+            wrapped = bool(wrapped_at) or bool(kb_topics)
+
+            dirs.append({
+                "slug": slug,
+                "path": str(path),
+                "topic": topic_list[0] if topic_list else "",
+                "topics": topic_list,
+                "question": session.get("question", ""),
+                "wrapped": wrapped,
+                "wrapped_at": wrapped_at,
+                "worktrees": session.get("worktrees", []),
+                "has_session_json": bool(session),
+                "files": files,
+                "md": mds,
+                "transcripts": tc,
+                "transcript_kb": tkb,
+                "last_activity": int(last),
+                "age": age_label(last, now),
+                "empty": files == 0,
+            })
+
+    missing = sorted({d for d in dir_topic if d not in seen_dirs})
+
+    return {
+        "notes_dir": str(NOTES_DIR),
+        "notes_kb": str(NOTES_KB),
+        "generated": int(now),
+        "topics": topics,
+        "dirs": dirs,
+        "missing_scratch": missing,
+    }
+
+
+def emit_fzf(index):
+    """Rows for the picker. Dir rows first (most recent first), then topic rows.
+
+    Selecting a topic row means "start a new dir under this topic" -- the caller
+    supplies the name from the query."""
+    dirs = sorted(index["dirs"], key=lambda d: -d["last_activity"])
+    topics = index["topics"]
+
+    # Cap the columns: one outlier slug (investigate-ingestion-for-5NoiPU...)
+    # is 47 chars and would push every other column off the screen.
+    def cap(values, lo, hi):
+        return max(lo, min(hi, max(values, default=lo)))
+
+    width = cap([len(d["slug"]) for d in dirs], 20, 30)
+    twidth = cap([len(s) for s in topics], 16, 26)
+
+    def elide(text, limit):
+        text = re.sub(r"\s+", " ", strip_markup(str(text))).strip()
+        return text if len(text) <= limit else text[: limit - 1] + "…"
+
+    rows = []
+    for d in dirs:
+        topic = d["topic"] or "-"
+        extra = len(d["topics"]) - 1
+        if extra > 0:
+            topic = "{} +{}".format(elide(topic, twidth - 3), extra)
+        state = "" if d["wrapped"] else "UNWRAPPED"
+        if d["empty"] and not d["transcripts"]:
+            state = "empty"
+        note = d["question"] or topics.get(d["topic"], {}).get("hook", "")
+        display = "  {:<{w}}  {:<{t}}  {:>5}  {:<9}  {}".format(
+            elide(d["slug"], width), elide(topic, twidth), d["age"], state,
+            elide(note, 60), w=width, t=twidth,
+        )
+        match = " ".join(keywords(
+            d["slug"], d["question"],
+            " ".join(d["topics"]),
+            " ".join(topics.get(t, {}).get("hook", "") for t in d["topics"]),
+            " ".join(a for t in d["topics"]
+                     for a in topics.get(t, {}).get("aliases", [])),
+        ))
+        rows.append((display, match, d["slug"]))
+
+    for slug in sorted(topics):
+        t = topics[slug]
+        display = "+ {:<{w}}  {:<{t}}  {:>5}  {:<9}  {}".format(
+            "new dir in topic", elide(slug, twidth), "", "[topic]",
+            elide(t["hook"], 60), w=width, t=twidth,
+        )
+        match = " ".join(keywords(slug, t["hook"], " ".join(t["aliases"]),
+                                  " ".join(t["tags"])))
+        rows.append((display, match, "+topic:" + slug))
+
+    for display, match, value in rows:
+        print("{}\t{}\t{}".format(display, match, value))
+
+
+def main():
+    args = sys.argv[1:]
+    mode = args[0] if args else "--json"
+    index = build()
+    if mode == "--fzf":
+        emit_fzf(index)
+    elif mode == "--json":
+        json.dump(index, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    else:
+        sys.stderr.write(__doc__)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
