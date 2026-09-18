@@ -16,6 +16,9 @@ that is easy to get quietly wrong:
     files, index.md, gdocs.md -- and inside the moved dirs themselves
   * records provenance in <target>/.session.json, including each absorbed dir's
     Claude Code transcript directory
+  * repoints the .notes-link file in any worktree that came out of an absorbed
+    dir, so /wrap from the coding session still finds its investigation
+  * refuses to move a dir that has a live tmux session, unless told otherwise
 
 That last point is the reason this script exists rather than a shell one-liner.
 A transcript dir is named after the path it was opened at
@@ -155,6 +158,42 @@ def plan_rewrites(moves, search_roots):
     return out
 
 
+def worktree_roots(extra):
+    """Where linked worktrees live: whatever was passed, plus the defaults from
+    tmux-workflows.zsh."""
+    roots = [Path(e).expanduser() for e in extra]
+    if not roots:
+        env_wt = os.environ.get("WORKTREES_DIR")
+        roots.append(Path(env_wt).expanduser() if env_wt else HOME / "worktrees")
+        monorepo = os.environ.get("MONOREPO_DIR")
+        if monorepo:
+            roots.append(Path(monorepo).expanduser() / ".worktrees")
+    return [r for r in roots if r.is_dir()]
+
+
+def plan_link_repoints(moves, roots):
+    """Worktrees whose .notes-link points at a dir being absorbed.
+
+    These are missed by the text rewrite twice over: the file has no suffix, and
+    worktrees are not under any of the searched roots. Left alone, /wrap from
+    the coding session would follow a path that no longer exists."""
+    wanted = {slug: "{}/{}".format(target, sub) for slug, sub, target in moves}
+    out = []
+    for root in roots:
+        for entry in sorted(root.iterdir()):
+            link = entry / ".notes-link"
+            if not link.is_file():
+                continue
+            try:
+                current = link.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            slug = Path(current).name
+            if slug in wanted:
+                out.append((link, current, str(NOTES_DIR / wanted[slug])))
+    return out
+
+
 def load_session(path):
     f = path / ".session.json"
     if not f.is_file():
@@ -183,6 +222,12 @@ def main():
                     help="dir to absorb; repeatable")
     ap.add_argument("--apply", action="store_true",
                     help="actually do it (default is a dry run)")
+    ap.add_argument("--close-sessions", action="store_true",
+                    help="close live tmux sessions for absorbed dirs; without "
+                         "this, a live session blocks the merge")
+    ap.add_argument("--worktrees", action="append", default=[], metavar="DIR",
+                    help="where to look for linked worktrees; defaults to "
+                         "$WORKTREES_DIR and $MONOREPO_DIR/.worktrees")
     args = ap.parse_args()
 
     target = args.target.strip("/")
@@ -224,6 +269,7 @@ def main():
     live = tmux_sessions()
     kill = ["notes--{}".format(slug) for slug, _, _ in moves
             if "notes--{}".format(slug) in live]
+    repoints = plan_link_repoints(moves, worktree_roots(args.worktrees))
 
     # --- report ---
     print("target:  {}{}".format(target_dir,
@@ -261,15 +307,35 @@ def main():
             print("      … {} more line(s)".format(len(hits) - 4))
     print("")
 
+    if repoints:
+        print("worktree links to repoint ({})".format(len(repoints)))
+        for link, current, new in repoints:
+            print("  {}".format(link))
+            print("      {}  ->  {}".format(current, new))
+        print("")
+
     if kill:
-        print("tmux sessions to close")
+        # A live session usually means a Claude session is running in that dir.
+        # Its cwd survives the move (same inode) but any absolute path it is
+        # holding does not, and it keeps writing to the transcript dir it opened
+        # with. Closing it is the caller's call to make, not this script's.
+        print("LIVE tmux sessions for dirs being absorbed:")
         for s in kill:
             print("  {}".format(s))
+        if args.close_sessions:
+            print("  → will be closed (--close-sessions)")
+        else:
+            print("  → merge these dirs later, or pass --close-sessions")
         print("")
 
     if not args.apply:
         print("dry run — nothing changed. Re-run with --apply.")
         return 0
+
+    if kill and not args.close_sessions:
+        die("refusing to move a dir with a live session: {}\n"
+            "             finish or close it, drop it from this merge, or pass "
+            "--close-sessions".format(", ".join(kill)))
 
     # --- apply ---
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -304,6 +370,10 @@ def main():
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
         undo_moves.append('mv "{}" "{}"'.format(dst, src))
+
+    for link, current, new_target in repoints:
+        link.write_text(new_target + "\n", encoding="utf-8")
+        undo_files.append('printf \'%s\\n\' "{}" > "{}"'.format(current, link))
 
     undo_lines = ["#!/bin/sh",
                   "# Undo the notes-merge of {}".format(stamp),
@@ -356,8 +426,8 @@ def main():
     undo.write_text("\n".join(undo_lines) + "\n", encoding="utf-8")
     undo.chmod(0o755)
 
-    print("done. {} dir(s) merged, {} file(s) rewritten.".format(
-        len(moves), len(rewrites)))
+    print("done. {} dir(s) merged, {} file(s) rewritten, {} worktree link(s) "
+          "repointed.".format(len(moves), len(rewrites), len(repoints)))
     print("undo:  {}".format(undo))
     return 0
 
