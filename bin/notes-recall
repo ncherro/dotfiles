@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""Find where you were working, by searching what you said.
+
+    notes-recall dalhouse pool tuning
+
+Answers "I was looking at this recently but I have no idea which dir I was in".
+
+The scratch dir name is a guess made at the start of an investigation, before
+you knew what it was about, so it is the worst possible search key. The Claude
+transcript is the opposite: it is a verbatim record, and every line of it
+carries the `cwd` and `gitBranch` it happened in. So this searches transcripts
+and reports the directory, not the other way round.
+
+Matches are grouped by directory and ranked by recency. Hits in your own
+messages rank above hits in tool output -- your phrasing is the signal, a
+matching line in a 10,000-line grep dump is not.
+
+Directories that a merge has moved are resolved to where they are now, via the
+`absorbed` provenance in .session.json.
+
+Env: NOTES_DIR, NOTES_KB, WORKTREES_DIR, MONOREPO_DIR
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+NOTES_DIR = Path(os.environ.get("NOTES_DIR", HOME / "workspace/_notes"))
+NOTES_KB = Path(os.environ.get("NOTES_KB", HOME / "workspace/notes-kb"))
+PROJECTS_DIR = HOME / ".claude/projects"
+
+MAX_GROUPS = 8
+SNIPPET_WIDTH = 150
+
+
+def die(msg, code=1):
+    sys.stderr.write("notes-recall: {}\n".format(msg))
+    sys.exit(code)
+
+
+def candidate_files(terms):
+    """One ripgrep pass for the union of terms, then require all of them.
+
+    Union first because it is a single scan of ~325 MB; the AND check afterwards
+    only reads files that already matched something."""
+    if not Path(PROJECTS_DIR).is_dir():
+        return []
+    cmd = ["rg", "--files-with-matches", "--ignore-case", "--no-messages"]
+    for t in terms:
+        cmd += ["-e", re.escape(t)]
+    cmd += ["--glob", "*.jsonl", str(PROJECTS_DIR)]
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except FileNotFoundError:
+        die("ripgrep (rg) not found")
+    except subprocess.SubprocessError as e:
+        die("search failed: {}".format(e))
+    return [Path(p) for p in out.stdout.split("\n") if p]
+
+
+def text_of(record):
+    """Readable text from a transcript record, or ''."""
+    content = record.get("message", {}).get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return " ".join(parts)
+    return ""
+
+
+def scan(path, terms):
+    """(cwd, branch, session_id, first_ts, last_ts, user_hits, other_hits, snippet)."""
+    lowered = [t.lower() for t in terms]
+    cwd = branch = session_id = ""
+    first_ts = last_ts = ""
+    user_hits = other_hits = 0
+    snippet = ""
+    snippet_rank = -1
+    # Which terms this transcript matched anywhere. All of them have to appear
+    # or the result is noise -- "dalhouse pool" should not return every session
+    # that ever said "pool".
+    matched = set()
+
+    try:
+        fh = path.open(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    with fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not cwd and rec.get("cwd"):
+                cwd = rec["cwd"]
+            if not branch and rec.get("gitBranch"):
+                branch = rec["gitBranch"]
+            if not session_id and rec.get("sessionId"):
+                session_id = rec["sessionId"]
+            ts = rec.get("timestamp", "")
+            if ts:
+                first_ts = first_ts or ts
+                last_ts = ts
+
+            kind = rec.get("type")
+            if kind not in ("user", "assistant"):
+                continue
+            body = text_of(rec)
+            if not body:
+                continue
+            low = body.lower()
+            present = [t for t in lowered if t in low]
+            if not present:
+                continue
+            matched.update(present)
+            found = len(present)
+            if kind == "user":
+                user_hits += found
+            else:
+                other_hits += found
+            # Prefer a snippet from the user's own words, and one that carries
+            # the most terms at once.
+            rank = found * 2 + (5 if kind == "user" else 0)
+            if rank > snippet_rank:
+                snippet_rank = rank
+                snippet = excerpt(body, lowered)
+
+    if not (user_hits or other_hits) or len(matched) < len(lowered):
+        return None
+    return {
+        "cwd": cwd,
+        "branch": branch,
+        "session_id": session_id,
+        "first_ts": first_ts,
+        "last_ts": last_ts,
+        "user_hits": user_hits,
+        "other_hits": other_hits,
+        "snippet": snippet,
+        "path": path,
+    }
+
+
+def excerpt(body, lowered):
+    body = re.sub(r"\s+", " ", body).strip()
+    low = body.lower()
+    at = min((low.find(t) for t in lowered if t in low), default=0)
+    start = max(0, at - 40)
+    end = min(len(body), start + SNIPPET_WIDTH)
+    out = body[start:end]
+    return ("…" if start else "") + out + ("…" if end < len(body) else "")
+
+
+def load_absorbed_map():
+    """old absolute path -> where it is now, from merge provenance."""
+    moved = {}
+    if not NOTES_DIR.is_dir():
+        return moved
+    for entry in os.scandir(NOTES_DIR):
+        if not entry.is_dir() or entry.name.startswith("."):
+            continue
+        meta = Path(entry.path) / ".session.json"
+        if not meta.is_file():
+            continue
+        try:
+            data = json.loads(meta.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for a in data.get("absorbed", []):
+            slug, sub = a.get("slug"), a.get("subdir")
+            if slug and sub:
+                moved[str(NOTES_DIR / slug)] = str(Path(entry.path) / sub)
+    return moved
+
+
+def describe(cwd, branch, moved):
+    """(display path, how to get back)."""
+    resolved = moved.get(cwd, cwd)
+    path = Path(resolved)
+    note = ""
+    if resolved != cwd:
+        note = "  (moved by a merge)"
+
+    try:
+        shown = "~/" + str(path.relative_to(HOME))
+    except ValueError:
+        shown = str(path)
+
+    hows = []
+    if NOTES_DIR in path.parents or path == NOTES_DIR:
+        parts = path.relative_to(NOTES_DIR).parts
+        if parts[0] == "reviews":
+            # PR reviews live as windows in one shared session, not their own.
+            hows.append("tatt pr-reviews   (window {})".format(
+                parts[1] if len(parts) > 1 else "?"))
+        else:
+            hows.append("notes {}".format(parts[0]))
+    elif branch and branch not in ("master", "main", "HEAD"):
+        session = "{}--{}".format(
+            path.parts[-3] if ".worktrees" in path.parts else path.name.split("--")[0],
+            branch.replace("/", "-"))
+        hows.append("tatt {}".format(session.replace(".", "-")))
+    if not path.exists():
+        hows.append("(directory is gone)")
+    return shown + note, hows
+
+
+def main():
+    terms = [t for t in sys.argv[1:] if t.strip()]
+    if not terms:
+        sys.stderr.write(__doc__)
+        return 2
+
+    files = candidate_files(terms)
+    if not files:
+        print("No sessions mention {}".format(" ".join(repr(t) for t in terms)))
+        return 0
+
+    results = []
+    for f in files:
+        r = scan(f, terms)
+        if r:
+            results.append(r)
+
+    if not results:
+        print("No sessions mention all of: {}".format(" ".join(terms)))
+        print("(matched inside tool output only — try fewer or different words)")
+        return 0
+
+    # One entry per directory: several sessions in the same dir is one place.
+    moved = load_absorbed_map()
+    groups = {}
+    for r in results:
+        key = moved.get(r["cwd"], r["cwd"])
+        g = groups.setdefault(key, {
+            "cwd": r["cwd"], "branch": r["branch"], "sessions": 0,
+            "user_hits": 0, "other_hits": 0, "last_ts": "", "first_ts": "",
+            "snippet": "", "best": -1, "session_id": "",
+        })
+        g["sessions"] += 1
+        g["user_hits"] += r["user_hits"]
+        g["other_hits"] += r["other_hits"]
+        g["branch"] = g["branch"] or r["branch"]
+        if r["last_ts"] > g["last_ts"]:
+            g["last_ts"] = r["last_ts"]
+            g["session_id"] = r["session_id"]
+        if not g["first_ts"] or (r["first_ts"] and r["first_ts"] < g["first_ts"]):
+            g["first_ts"] = r["first_ts"]
+        rank = r["user_hits"] * 3 + r["other_hits"]
+        if rank > g["best"]:
+            g["best"] = rank
+            g["snippet"] = r["snippet"]
+
+    ordered = sorted(groups.values(), key=lambda g: g["last_ts"], reverse=True)
+
+    print("{} place(s) mention {} — most recent first\n".format(
+        len(ordered), ", ".join(terms)))
+
+    for g in ordered[:MAX_GROUPS]:
+        shown, hows = describe(g["cwd"], g["branch"], moved)
+        when = g["last_ts"][:10] or "?"
+        span = ""
+        if g["first_ts"][:10] and g["first_ts"][:10] != when:
+            span = " (since {})".format(g["first_ts"][:10])
+        print("  {}{}  {}".format(when, span, shown))
+        meta = ["{} session(s)".format(g["sessions"])]
+        if g["user_hits"]:
+            meta.append("{} in your messages".format(g["user_hits"]))
+        if g["other_hits"]:
+            meta.append("{} in output".format(g["other_hits"]))
+        if g["branch"] and g["branch"] not in ("master", "main", "HEAD"):
+            meta.append("branch {}".format(g["branch"]))
+        print("      {}".format(" · ".join(meta)))
+        if g["snippet"]:
+            print("      \"{}\"".format(g["snippet"]))
+        for how in hows:
+            print("      → {}".format(how))
+        if g["session_id"]:
+            print("      → claude --resume {}   (from that dir)".format(
+                g["session_id"]))
+        print("")
+
+    if len(ordered) > MAX_GROUPS:
+        print("  … {} more".format(len(ordered) - MAX_GROUPS))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
