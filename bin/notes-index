@@ -50,7 +50,9 @@ STOPWORDS = {
 
 def slug_from_transcript_dir(name):
     """`-Users-nicholash-workspace--notes-mp-in-udl` -> `mp-in-udl`."""
-    prefix = "-" + str(NOTES_DIR).lstrip("/").replace("/", "-") + "-"
+    # Claude Code encodes a project path by replacing /, _ and . with '-'.
+    encoded = re.sub(r"[/_.]", "-", str(NOTES_DIR).lstrip("/"))
+    prefix = "-" + encoded + "-"
     if name.startswith(prefix):
         return name[len(prefix):]
     return None
