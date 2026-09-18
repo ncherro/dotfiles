@@ -14,6 +14,7 @@
 #   code <branch> -p …   start a coding session from one, in a linked worktree
 #   review-pr <url>      review a PR in its own tmux window
 #   wip                  what am I in the middle of
+#   recall <terms>       which dir was I working on that in
 #   notes-gc             prune notes dirs that hold nothing
 #
 # Optional:
@@ -42,7 +43,7 @@
 : ${MONOREPO_DIR:=""}
 
 # --- Dependency check ---
-for _twf_cmd in tmux git gh jq fzf; do
+for _twf_cmd in tmux git gh jq fzf rg; do
   if ! command -v "$_twf_cmd" &>/dev/null; then
     echo "tmux-workflows: missing required command: $_twf_cmd" >&2
   fi
@@ -1131,6 +1132,28 @@ code() {
   echo "Worktree: $dest"
   echo "Notes:    $notes_dir  (linked via --add-dir)"
   echo "Tmux:     $session_name (detached) — tatt $session_name"
+}
+
+# --- Workflow: where was I? ---
+
+# Find where you were working, by searching what you said
+#
+#   recall dalhouse pool        directories whose transcripts mention all terms
+#
+# `notes` searches names and knowledge base hooks -- what a subject is called.
+# This searches the transcripts -- what you actually said. Use it when the
+# subject is clear but the directory is not.
+recall() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: recall <terms...>"
+    echo "  e.g. recall dalhouse pool     # which dir was the pool tuning in?"
+    return 1
+  fi
+  if [[ ! -x "$NOTES_BIN/notes-recall" ]]; then
+    echo "recall: $NOTES_BIN/notes-recall not found"
+    return 1
+  fi
+  "$NOTES_BIN/notes-recall" "$@"
 }
 
 # --- Workflow: what am I in the middle of? ---
