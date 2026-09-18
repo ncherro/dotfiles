@@ -72,7 +72,7 @@ alias dc="docker compose"
 alias dcps='docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"'
 alias dcps-all="docker compose ps"
  
-alias c=claude
+alias c="claude --model claude-opus-5"
 
 ulimit -n 10000
 export CLICOLOR=1

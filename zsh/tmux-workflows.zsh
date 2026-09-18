@@ -1131,27 +1131,42 @@ wip() {
 
   local -a live
   live=( ${(f)"$(tmux ls -F '#{session_name}' 2>/dev/null)"} )
+  local marker
 
+  # In flight means: touched in the last week, or has a live tmux session.
+  # Everything unwrapped regardless of age is a backlog, not a WIP list -- it
+  # gets counted at the end instead of listed.
   local -a rows
-  rows=( ${(f)"$(print -r -- "$index" | jq -r '
-    .dirs[]
-    | select(.last_activity > (now - 86400 * 21) or .wrapped == false)
+  rows=( ${(f)"$(print -r -- "$index" | jq -r --arg live "${(j:,:)live}" '
+    ($live | split(",")) as $sessions
+    | .dirs[]
     | select(.files > 0 or .transcripts > 0)
-    | [.slug, (.topic // "-"), .age, (if .wrapped then "" else "UNWRAPPED" end)]
+    | select(.last_activity > (now - 86400 * 7)
+             or (("notes--" + .slug) | IN($sessions[])))
+    | [.slug,
+       (if .topic == "" then "-" else .topic end),
+       .age,
+       (if .wrapped then "" else "UNWRAPPED" end)]
     | @tsv')"} )
 
   echo "notes"
   if (( ! ${#rows} )); then
     echo "  (nothing recent)"
   else
-    local row slug rest marker
+    local row slug
     for row in "${rows[@]}"; do
       slug="${row%%	*}"
       marker="  "
       (( ${live[(I)notes--$slug]} )) && marker="⚡"
-      printf '%s %s\n' "$marker" "$row"
+      printf '%s\t%s\n' "$marker" "$row"
     done | column -t -s $'\t'
   fi
+
+  local stale
+  stale=$(print -r -- "$index" | jq '[.dirs[]
+    | select(.wrapped == false and .last_activity <= (now - 86400 * 7))
+    | select(.files > 0 or .transcripts > 0)] | length')
+  (( stale > 0 )) && echo "  + ${stale} older, never distilled — notes-gc"
   echo ""
 
   echo "worktrees"
@@ -1174,8 +1189,10 @@ wip() {
   else
     local -a out
     out=()
+    # Declared once: zsh's `local` echoes the variable when it re-declares one
+    # that already exists in the same scope, which would print on every pass.
+    local br note state sess repo_of
     for d in "${wt_lines[@]}"; do
-      local br note state sess repo_of
       br=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue
       repo_of=$(basename "$(dirname "$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)")")
       note="-"
@@ -1188,7 +1205,7 @@ wip() {
       fi
       sess="${repo_of}--${br//\//-}"
       sess=${sess//./-}
-      local marker="  "
+      marker="  "
       (( ${live[(I)$sess]} )) && marker="⚡"
       out+=( "${marker}	${repo_of}	${br}	${note}	${state}" )
     done
@@ -1206,10 +1223,21 @@ wip() {
 _tmux_workflows_ws() { _path_files -W "$WORKSPACE" -/ }
 _tmux_workflows_wt() { _path_files -W "$WORKTREES_DIR" -/ }
 
+# Existing scratch dirs plus knowledge base topic slugs: typing a topic name
+# should reach it even when no dir is named that yet.
+_tmux_workflows_notes() {
+  local -a dirs topics
+  dirs=( "$NOTES_DIR"/*(/N:t) )
+  topics=( "$NOTES_KB"/topics/*.md(N:t:r) )
+  _describe -t dirs 'scratch dir' dirs
+  _describe -t topics 'kb topic' topics
+}
+
 _tmux_workflows_init_completions() {
   compdef _tmux_workflows_ws ws
   compdef _tmux_workflows_wt wt
   compdef _tmux_workflows_ws tat
+  compdef _tmux_workflows_notes notes
   add-zsh-hook -d precmd _tmux_workflows_init_completions
 }
 
