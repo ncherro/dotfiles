@@ -24,6 +24,10 @@ zsh_plugins.txt        # antidote plugin list
 zshrc.local.example    # template for machine-local overrides
 bin/
   worktree-cleanup.sh  # clean up merged worktrees, stale sessions, and build caches
+  notes-index          # joins notes dirs + session metadata + knowledge base
+  notes-preview        # fzf preview pane for the notes picker
+  notes-merge          # consolidate duplicate notes dirs, with undo
+  notes-recall         # find the dir you were working in, by searching transcripts
 tmux.conf
 vimrc
 kitty.conf
@@ -109,9 +113,12 @@ source /path/to/tmux-workflows.zsh
 |------|-------------|-------|
 | `tmux` | all | Session management backbone |
 | `git` | all | Worktrees, branch detection, repo navigation |
-| `gh` | `ghp`, `worktree-cleanup.sh` | GitHub CLI |
-| `jq` | `worktree-cleanup.sh` | JSON parsing for PR status |
-| `claude` | `review-pr` | [Claude Code](https://claude.ai/code) CLI |
+| `gh` | `ghp`, `review-*`, `worktree-cleanup.sh` | GitHub CLI |
+| `jq` | `review-*`, `notes`, `code`, `wip`, `notes-gc` | reads and writes the session metadata |
+| `fzf` | `notes` | the picker; falls back to create-without-prompting if absent |
+| `python3` | `notes`, `wip`, `notes-gc`, `recall` | the `bin/notes-*` helpers |
+| `rg` | `recall` | searches ~325 MB of transcripts in about a second |
+| `claude` | `review-pr`, `code` | [Claude Code](https://claude.ai/code) CLI |
 
 ### Configuration
 
@@ -123,6 +130,11 @@ Set these before sourcing to override defaults:
 | `WORKTREES_DIR` | `~/worktrees` | Where git worktrees are created |
 | `NOTES_DIR` | `$WORKSPACE/_notes` | Research notes directory |
 | `REVIEWS_DIR` | `$NOTES_DIR/reviews` | PR review artifacts directory |
+| `NOTES_KB` | `$WORKSPACE/notes-kb` | Knowledge base `notes` routes against. Unset it to fall back to plain directory-name matching |
+| `MONOREPO_DIR` | *(empty)* | Repo whose worktrees go through `spt git:worktree` rather than plain git. Also enables monorepo cleanup in `worktree-cleanup.sh` |
+| `NOTES_BIN` | `$DOTFILES/bin` | Where the `notes-*` helpers live |
+| `NOTES_CACHE` | `~/.cache/tmux-workflows/notes-routing.tsv` | Generated routing table |
+| `NOTES_REDIRECTS` | *(next to `NOTES_CACHE`)* | Generated old-name → current-dir table |
 | `OPEN_CMD` | `open` | Browser open command (`xdg-open` on Linux) |
 | `GWT_SPARSE_CHECKOUT_CMD` | *(empty)* | Sparse checkout command for `gwt`'s second arg (e.g. `spt git:sparse reset && spt git:sparse add`) |
 
@@ -139,7 +151,55 @@ Set these before sourcing to override defaults:
 | `ghr` | Open the current repo on GitHub in the browser |
 | `ghp` | Open the current branch's PR in the browser |
 | `review-pr <url>` | Review a PR in a dedicated tmux session with Claude Code |
-| `notes <dirname>` | Open a research workspace in a dedicated tmux session |
+| `review-status` | State of every tracked review: new commits, replies, merged |
+| `review-cleanup` | Drop review dirs whose PRs are merged or closed |
+| `notes <topic>` | Open a research workspace, routed against the knowledge base |
+| `code <branch> -p "<task>"` | Start a coding session from a notes dir: worktree, detached tmux session, Claude launched with `--add-dir` back to the notes |
+| `recall <terms>` | Which directory was I working on that in |
+| `wip` | Notes, worktrees and reviews currently in flight |
+| `notes-gc` | Prune notes dirs that hold nothing; report ones never distilled |
+
+### Notes, code, and the knowledge base
+
+`notes`, `code` and `review-pr` all produce the same shape of thing: a
+directory, a tmux session, and a Claude transcript. They are joined by a
+metadata file — `.session.json` in a notes dir, `.review-meta.json` in a review
+dir, `.notes-link` at a worktree root — which is what lets `wip`, `notes-gc` and
+`recall` answer questions across all three without keeping a separate list.
+
+`bin/notes-index` is the only thing that reads all of it. Everything else shells
+out to it. Some of what it does is non-obvious:
+
+- **The knowledge base is the routing table.** Topic slugs, frontmatter
+  `aliases`, `index.md` hooks and `**Scratch:**` pointers are what `notes`
+  matches against, which is why `notes playcount` can find a dir whose name
+  shares no words with the query.
+- **Dirs that predate `.session.json` still work.** Topics are inferred from the
+  KB's own `**Scratch:**` lines, so nothing needed migrating.
+- **`**Scratch:**` is parsed as a block, not a file-wide grep.** A topic that
+  merely *mentions* another topic's scratch dir must not claim it.
+- **A Claude transcript dir is named after the path it was opened at**
+  (`-Users-you-workspace--notes-<slug>`, with `/`, `_` and `.` all mapped to
+  `-`). It does not follow a dir that moves. That is why `notes-merge` records
+  it as provenance, and why `recall` keys on the `cwd` field inside the
+  transcript rather than trying to decode the dir name — the encoding is lossy
+  and cannot be reversed.
+
+Two gotchas worth not rediscovering:
+
+- **fzf matches the line as transformed by `--with-nth`.** A trailing hidden
+  field is invisible to the matcher, so anything searchable has to be in the
+  visible columns. That is why aliases are a column in the picker.
+- **`local` in zsh prints the variable** when it re-declares one that already
+  exists in the same scope. Declare once, above the loop.
+
+The helpers are dry-run or read-only by default. `notes-merge` in particular
+refuses to move a dir with a live tmux session, and writes an undo script with
+byte-for-byte backups to `$NOTES_DIR/.merge-undo/<timestamp>/`.
+
+The matching slash commands (`/wrap`, `/code`, `/notes-merge`, `/kb-tidy`,
+`/review-pr`) live in a separate, work-specific repo and are not part of these
+dotfiles. The workflow they add up to is written up in `$NOTES_DIR/README.md`.
 
 ### Worktree cleanup
 
@@ -153,11 +213,7 @@ ln -s /path/to/dotfiles/bin/worktree-cleanup.sh ~/worktrees/cleanup.sh
 ~/worktrees/cleanup.sh
 ```
 
-Set `MONOREPO_DIR` to enable monorepo-specific cleanup (sparse query worktree reset, Bazel cache pruning):
-
-```sh
-export MONOREPO_DIR=~/workspace/my-monorepo
-```
+`MONOREPO_DIR` (see Configuration) also enables monorepo-specific cleanup here: sparse query worktree reset and Bazel cache pruning.
 
 ## Color schemes
 
