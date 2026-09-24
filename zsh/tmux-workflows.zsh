@@ -451,8 +451,8 @@ _review_infer_from_dirname() {
 #
 # `review <url>` adds a review to the session; `review` on its own gets you
 # back to the session, which a reboot or a stray kill-session takes with it.
-# Window 0 runs review-status, so you land on the list rather than an empty
-# shell. `resume` can recreate this session too, but deliberately starts
+# Window 0 runs `review-status --windows`, so you land on the list *and* on a
+# window per review that still wants something. `resume` can recreate this session too, but deliberately starts
 # everything empty -- that is the difference between the two.
 _review_session() {
   local session="pr-reviews" target cmd
@@ -485,7 +485,7 @@ _review_session() {
   # is running something is how you end up in someone else's prompt.
   cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}')
   case "$cmd" in
-    zsh|bash|sh) tmux send-keys -t "$target" "review-status" Enter ;;
+    zsh|bash|sh) tmux send-keys -t "$target" "review-status --windows" Enter ;;
   esac
 
   if [[ -n "$TMUX" ]]; then
@@ -562,6 +562,10 @@ EOF
     tmux select-window -t "${session}:${window}"
   else
     tmux new-window -t "$session" -n "$window" -c "$dir"
+    # automatic-rename is on globally and would rename this to `claude` and
+    # then `zsh`, after which the check above misses it and every re-review of
+    # the same PR opens another window for it.
+    tmux set-window-option -t "${session}:${window}" automatic-rename off >/dev/null
   fi
 
   tmux send-keys -t "${session}:${window}" \
@@ -576,22 +580,142 @@ EOF
 
 alias review-pr=review
 
+# One review's state, as a single TSV line: state, dir, flags, title, url
+#
+# No field is ever empty -- "-" stands in for one -- because read(1) with
+# IFS=tab treats a run of tabs as a single delimiter, which silently shifts
+# every later field left.
+#
+# state is attention | updated | open | approved | merged | closed | unknown.
+# Split out of review-status so the calls can be fanned out, and so the session
+# builder can act on exactly the data the report renders rather than scraping
+# it back out of formatted text.
+_review_probe() {
+  local dir="$1" my_login="$2"
+  local dirname="${dir:t}"
+  local meta="${dir}/.review-meta.json"
+
+  local owner repo number head_commit="unknown" url=""
+  if [[ -f "$meta" ]]; then
+    owner=$(jq -r '.owner' "$meta")
+    repo=$(jq -r '.repo' "$meta")
+    number=$(jq -r '.pr_number' "$meta")
+    head_commit=$(jq -r '.head_commit' "$meta")
+    url=$(jq -r '.url' "$meta")
+  else
+    repo=${dirname%--[0-9]#}
+    number=${dirname##*--}
+    owner="$REVIEW_DEFAULT_OWNER"
+    url="https://${REVIEW_GH_HOST}/${owner}/${repo}/pull/${number}"
+  fi
+
+  local pr_json
+  pr_json=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
+    --jq '{state: .state, merged: .merged, head: .head.sha, title: .title}' 2>/dev/null)
+
+  if [[ -z "$pr_json" ]]; then
+    printf 'unknown\t%s\t-\tcould not fetch PR status\t%s\n' "$dirname" "$url"
+    return
+  fi
+
+  local state is_merged current_head title
+  state=$(print -r -- "$pr_json" | jq -r '.state')
+  is_merged=$(print -r -- "$pr_json" | jq -r '.merged')
+  current_head=$(print -r -- "$pr_json" | jq -r '.head')
+  title=$(print -r -- "$pr_json" | jq -r '.title')
+  local short_title="${title:0:60}"
+  (( ${#title} > 60 )) && short_title="${short_title}…"
+
+  if [[ "$is_merged" == "true" ]]; then
+    printf 'merged\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+    return
+  fi
+  if [[ "$state" == "closed" ]]; then
+    printf 'closed\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+    return
+  fi
+
+  local my_review_state=""
+  if [[ -n "$my_login" ]]; then
+    my_review_state=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
+      --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null)
+  fi
+
+  local has_new_commits=0 reply_count=0
+  [[ "$head_commit" != "unknown" && "$head_commit" != "$current_head" ]] && has_new_commits=1
+
+  if [[ -f "$meta" ]] && jq -e '.comments | length > 0' "$meta" &>/dev/null; then
+    local my_comment_ids all_comments
+    my_comment_ids=$(jq -r '[.comments[].id] | join(",")' "$meta")
+    all_comments=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
+      --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null)
+    if [[ -n "$all_comments" ]]; then
+      reply_count=$(print -r -- "$all_comments" | jq --arg ids "$my_comment_ids" '
+        ($ids | split(",") | map(tonumber)) as $mine |
+        [.[] | select(.in_reply_to_id != null and (.in_reply_to_id | IN($mine[])))] | length')
+    fi
+  fi
+
+  if [[ "$my_review_state" == "APPROVED" ]]; then
+    printf 'approved\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+  elif (( reply_count > 0 )); then
+    local flags="${reply_count} replies"
+    (( has_new_commits )) && flags+=", new commits"
+    printf 'attention\t%s\t%s\t%s\t%s\n' "$dirname" "$flags" "$short_title" "$url"
+  elif (( has_new_commits )); then
+    printf 'updated\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+  else
+    printf 'open\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+  fi
+}
+
+# Every review's state, probed in parallel.
+#
+# Serially this was ~40s for eleven reviews: two or three GitHub round trips
+# each, one after another. The work is all waiting, so it fans out -- six at a
+# time, which is enough to hide the latency without opening a connection per
+# review.
+_review_probe_all() {
+  local -a dirs=( "${REVIEWS_DIR}"/*(/N) )
+  (( ${#dirs} )) || return 0
+
+  local my_login
+  my_login=$(GH_HOST="$REVIEW_GH_HOST" gh api user --jq '.login' 2>/dev/null)
+
+  local tmp
+  tmp=$(mktemp -d) || return 1
+  local -i i=0
+  local d
+  for d in "${dirs[@]}"; do
+    (( i++ ))
+    _review_probe "$d" "$my_login" > "${tmp}/$(printf '%03d' $i)" &
+    (( i % 6 )) || wait
+  done
+  wait
+  cat "${tmp}"/*(N)
+  rm -rf "$tmp"
+}
+
 # Show status of all tracked PR reviews
+#
+#   review-status              the report
+#   review-status --windows    + a tmux window per review still wanting work
 review-status() {
   setopt local_options typeset_silent no_xtrace no_verbose
+  local open_windows=0
+  [[ "$1" == "--windows" ]] && open_windows=1
+
   local reviews_dir="${REVIEWS_DIR}"
   if [[ ! -d "$reviews_dir" ]]; then
     echo "No reviews directory found"
     return 1
   fi
-
-  local -a review_dirs=("$reviews_dir"/*/(:N))
-  if (( ${#review_dirs[@]} == 0 )); then
+  local -a review_dirs=( "$reviews_dir"/*(/N) )
+  if (( ${#review_dirs} == 0 )); then
     echo "No reviews found"
     return 0
   fi
 
-  local total=${#review_dirs[@]} current=0
   _review_spinner() {
     local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     local i=0
@@ -601,142 +725,78 @@ review-status() {
       sleep 0.08
     done
   }
-  _review_spinner "Checking ${total} reviews..." &!
+  _review_spinner "Checking ${#review_dirs} reviews..." &!
   local spin_pid=$!
   trap "kill $spin_pid 2>/dev/null; printf '\r\033[K' >&2" EXIT INT TERM
 
-  local -a attention updated open approved merged closed
-  local my_login
-  my_login=$(GH_HOST="$REVIEW_GH_HOST" gh api user --jq '.login' 2>/dev/null)
-  local found=0
-
-  for dir in "${review_dirs[@]}"; do
-    [[ -d "$dir" ]] || continue
-    found=1
-    local dirname=$(basename "$dir")
-    local meta="${dir}.review-meta.json"
-
-    local owner repo number head_commit="unknown" url=""
-    if [[ -f "$meta" ]]; then
-      owner=$(jq -r '.owner' "$meta")
-      repo=$(jq -r '.repo' "$meta")
-      number=$(jq -r '.pr_number' "$meta")
-      head_commit=$(jq -r '.head_commit' "$meta")
-      url=$(jq -r '.url' "$meta")
-    else
-      repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
-      number=$(echo "$dirname" | grep -oE '[0-9]+$')
-      owner="$REVIEW_DEFAULT_OWNER"
-      url="https://${REVIEW_GH_HOST}/${owner}/${repo}/pull/${number}"
-    fi
-
-    local pr_json
-    pr_json=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
-      --jq '{state: .state, merged: .merged, head: .head.sha, title: .title}' 2>/dev/null)
-
-    if [[ -z "$pr_json" ]]; then
-      attention+=("  ? ${dirname}  (could not fetch PR status)")
-      continue
-    fi
-
-    local state current_head title is_merged
-    state=$(echo "$pr_json" | jq -r '.state')
-    is_merged=$(echo "$pr_json" | jq -r '.merged')
-    current_head=$(echo "$pr_json" | jq -r '.head')
-    title=$(echo "$pr_json" | jq -r '.title')
-
-    local short_title="${title:0:60}"
-    [[ ${#title} -gt 60 ]] && short_title="${short_title}…"
-
-    if [[ "$is_merged" == "true" ]]; then
-      merged+=("  $(printf '%-30s %s' "$dirname" "$short_title")" "    ${url}" "")
-    elif [[ "$state" == "closed" ]]; then
-      closed+=("  $(printf '%-30s %s' "$dirname" "$short_title")" "    ${url}" "")
-    else
-      local my_review_state=""
-      if [[ -n "$my_login" ]]; then
-        my_review_state=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
-          --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null)
-      fi
-
-      local has_new_commits=0 reply_count=0
-
-      if [[ "$head_commit" != "unknown" && "$head_commit" != "$current_head" ]]; then
-        has_new_commits=1
-      fi
-
-      if [[ -f "$meta" ]] && jq -e '.comments | length > 0' "$meta" &>/dev/null; then
-        local my_comment_ids
-        my_comment_ids=$(jq -r '[.comments[].id] | join(",")' "$meta")
-        local all_comments
-        all_comments=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
-          --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null)
-        if [[ -n "$all_comments" ]]; then
-          reply_count=$(echo "$all_comments" | jq --arg ids "$my_comment_ids" '
-            ($ids | split(",") | map(tonumber)) as $mine |
-            [.[] | select(.in_reply_to_id != null and (.in_reply_to_id | IN($mine[])))] | length
-          ')
-        fi
-      fi
-
-      if [[ "$my_review_state" == "APPROVED" ]]; then
-        approved+=("    $(printf '%-28s %s' "$dirname" "$short_title")")
-        approved+=("    ${url}" "")
-      elif (( reply_count > 0 )); then
-        local flags="${reply_count} replies"
-        (( has_new_commits )) && flags+=", new commits"
-        attention+=("  * $(printf '%-28s %-20s %s' "$dirname" "[$flags]" "$short_title")")
-        attention+=("    ${url}" "")
-      elif (( has_new_commits )); then
-        updated+=("  ~ $(printf '%-28s %s' "$dirname" "$short_title")")
-        updated+=("    ${url}" "")
-      else
-        open+=("    $(printf '%-28s %s' "$dirname" "$short_title")")
-        open+=("    ${url}" "")
-      fi
-    fi
-  done
+  local -a rows
+  rows=( ${(f)"$(_review_probe_all)"} )
 
   kill $spin_pid 2>/dev/null
   wait $spin_pid 2>/dev/null
   printf '\r\033[K' >&2
   trap - EXIT INT TERM
 
-  if (( ! found )); then
+  if (( ! ${#rows} )); then
     echo "No reviews found"
     return 0
   fi
 
-  if (( ${#attention[@]} )); then
-    echo "Needs attention:"
-    printf '%s\n' "${attention[@]}"
+  local -a attention updated open approved merged closed unknown actionable
+  local row state dirname flags title url
+  for row in "${rows[@]}"; do
+    IFS=$'\t' read -r state dirname flags title url <<< "$row"
+    [[ "$flags" == "-" ]] && flags=""
+    case "$state" in
+      attention)
+        attention+=( "  * $(printf '%-28s %-20s %s' "$dirname" "[$flags]" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" ) ;;
+      updated)
+        updated+=( "  ~ $(printf '%-28s %s' "$dirname" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" ) ;;
+      open)
+        open+=( "    $(printf '%-28s %s' "$dirname" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" ) ;;
+      approved) approved+=( "    $(printf '%-28s %s' "$dirname" "$title")" "    ${url}" "" ) ;;
+      merged)   merged+=( "  $(printf '%-30s %s' "$dirname" "$title")" "    ${url}" "" ) ;;
+      closed)   closed+=( "  $(printf '%-30s %s' "$dirname" "$title")" "    ${url}" "" ) ;;
+      *)        unknown+=( "  ? ${dirname}  (${title})" ) ;;
+    esac
+  done
+
+  local -a group_names group_vars
+  (( ${#attention} )) && { echo "Needs attention:"; printf '%s\n' "${attention[@]}"; echo "" }
+  (( ${#updated}   )) && { echo "Updated:";        printf '%s\n' "${updated[@]}";   echo "" }
+  (( ${#open}      )) && { echo "Open:";           printf '%s\n' "${open[@]}";      echo "" }
+  (( ${#approved}  )) && { echo "Approved:";       printf '%s\n' "${approved[@]}";  echo "" }
+  (( ${#merged}    )) && { echo "Merged:";         printf '%s\n' "${merged[@]}";    echo "" }
+  (( ${#closed}    )) && { echo "Closed:";         printf '%s\n' "${closed[@]}" }
+  (( ${#unknown}   )) && { echo "Unknown:";        printf '%s\n' "${unknown[@]}" }
+
+  # A window each for the reviews still wanting something, so the session you
+  # come back to is the work rather than a list of it. Approved, merged and
+  # closed get nothing -- there is no work left in them.
+  if (( open_windows )); then
+    if [[ -z "$TMUX" ]]; then
+      echo ""
+      echo "review-status: --windows needs to run inside tmux"
+      return 0
+    fi
+    local session="pr-reviews" existing opened=0
+    existing=$(tmux list-windows -t "=$session" -F '#{window_name}' 2>/dev/null)
+    for dirname in "${actionable[@]}"; do
+      print -r -- "$existing" | grep -qxF "$dirname" && continue
+      tmux new-window -d -t "$session" -n "$dirname" -c "${reviews_dir}/${dirname}" 2>/dev/null || continue
+      # Same reason as the status window: automatic-rename would rename this
+      # the moment anything runs in it, and the check above would then miss it.
+      tmux set-window-option -t "${session}:${dirname}" automatic-rename off >/dev/null
+      (( opened++ ))
+    done
     echo ""
-  fi
-  if (( ${#updated[@]} )); then
-    echo "Updated:"
-    printf '%s\n' "${updated[@]}"
-    echo ""
-  fi
-  if (( ${#open[@]} )); then
-    echo "Open:"
-    printf '%s\n' "${open[@]}"
-    echo ""
-  fi
-  if (( ${#approved[@]} )); then
-    echo "Approved:"
-    printf '%s\n' "${approved[@]}"
-    echo ""
-  fi
-  if (( ${#merged[@]} )); then
-    echo "Merged:"
-    printf '%s\n' "${merged[@]}"
-    echo ""
-  fi
-  if (( ${#closed[@]} )); then
-    echo "Closed:"
-    printf '%s\n' "${closed[@]}"
+    echo "${opened} window(s) opened, ${#actionable} review(s) still wanting work"
   fi
 }
+
 
 # Remove review dirs for merged/closed PRs
 review-gc() {
