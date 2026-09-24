@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# tmux-sessions — the session list, in columns that line up.
+#
+# Usage:
+#   tmux-sessions          aligned list, newest first   (this is what `tls` runs)
+#   tmux-sessions --pick   fzf picker in a popup        (this is what `prefix + s` runs)
+#   tmux-sessions --rows   the picker's raw rows, for its own reload binding
+#
+# Why not `choose-tree -F`: that format is only the text *after* a fixed
+# "<session name>: " label, so the name prints twice and every column starts at
+# a different offset. There is no way to align it. A popup running this gets
+# the same list as `tls` outside tmux, which is the point.
+#
+# Session names are <repo>--<user>-<branch> or notes--<slug>, so the left two
+# thirds of every line is the same text repeated. Tag the kind, strip the
+# prefix, and spend the width on what differs. Adjust STRIP for another repo.
+
+set -uo pipefail
+
+STRIP='s|^notes--||; s|^services-pilot--||; s|^nicholash[-/]||'
+NAME_WIDTH=44
+
+rows() {
+  local ts att wins when sess tag short procs
+  tmux ls -F '#{session_activity}	#{?session_attached,*, }	#{session_windows}	#{t/p:session_activity}	#{session_name}' 2>/dev/null \
+    | sort -t'	' -k1,1nr \
+    | while IFS=$'\t' read -r ts att wins when sess; do
+        case "$sess" in
+          notes--*)    tag=notes ;;
+          pr-*)        tag=pr    ;;
+          *)           tag=wt    ;;
+        esac
+        short=$(printf '%s' "$sess" | sed -E "$STRIP")
+        procs=$(tmux list-windows -t "=$sess" -F '#{pane_current_command}' 2>/dev/null \
+          | grep -vE '^(zsh|bash|sh|login)$' | sort -u | tr '\n' ' ')
+        # Display, then the real name hidden behind a tab for the picker.
+        printf '%s %-5s %-*s %2sw  %-5s  %s\t%s\n' \
+          "$att" "$tag" "$NAME_WIDTH" "$short" "$wins" "$when" "$procs" "$sess"
+      done
+}
+
+case "${1:-}" in
+  --rows) rows ;;
+
+  --pick)
+    # A popup takes its stderr with it when it closes, so a failure in here is
+    # invisible by default. TMUX_SESSIONS_DEBUG=1 keeps a copy.
+    if [ -n "${TMUX_SESSIONS_DEBUG:-}" ]; then
+      exec 2>>/tmp/tmux-pick.log
+      echo "--- $(date +%H:%M:%S) tty=$(tty 2>&1) fzf=$(command -v fzf)" >&2
+    fi
+    self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    pick=$(rows | fzf --delimiter=$'\t' --with-nth=1 \
+                      --reverse --no-sort \
+                      --prompt='session> ' \
+                      --header='enter: switch · ctrl-x: kill' \
+                      --bind "ctrl-x:execute-silent(tmux kill-session -t '={2}')+reload($self --rows)")
+    [ -n "${TMUX_SESSIONS_DEBUG:-}" ] && echo "    fzf exit=$? pick=${pick:-<empty>}" >&2
+    [ -n "$pick" ] || exit 0
+    sess="${pick##*$'\t'}"
+    if [ -n "${TMUX:-}" ]; then
+      tmux switch-client -t "=$sess"
+    else
+      tmux attach-session -t "=$sess"
+    fi
+    ;;
+
+  *)
+    out=$(rows)
+    if [ -z "$out" ]; then
+      echo "no tmux sessions — 'resume' reopens what you were working on"
+      exit 0
+    fi
+    # Drop the hidden name field (only the picker needs it) and the trailing
+    # blanks left by sessions with nothing running.
+    printf '%s\n' "$out" | cut -d$'\t' -f1 | sed 's/ *$//'
+    ;;
+esac
