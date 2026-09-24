@@ -38,7 +38,6 @@ tmux.conf
 vimrc
 kitty.conf
 gitconfig
-claude/settings.json   # symlinked to ~/.claude/settings.json
 ```
 
 `~/.zshrc.local` is sourced automatically but never committed — use it for machine-local or sensitive config. See `zshrc.local.example` for a template.
