@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKTREES_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Worktrees live in the repo they belong to, at <repo>/.worktrees/<branch>, so
+# there is no single worktrees directory to walk -- find them by scanning the
+# repos in $WORKSPACE.
+: "${WORKSPACE:="$HOME/workspace"}"
+: "${WORKTREES_SUBDIR:=".worktrees"}"
 : "${MONOREPO_DIR:=""}"
-: "${REVIEWS_DIR:="$HOME/workspace/_notes/reviews"}"
-: "${NOTES_DIR:="$HOME/workspace/_notes"}"
+: "${REVIEWS_DIR:="$WORKSPACE/_notes/reviews"}"
+: "${NOTES_DIR:="$WORKSPACE/_notes"}"
+
+# Every worktree under a repo in $WORKSPACE, plus $MONOREPO_DIR when it lives
+# outside it. One path per line.
+_all_worktree_dirs() {
+  local roots=() seen="" r d abs
+  for r in "$WORKSPACE"/*/; do
+    [ -d "$r" ] && roots+=("${r%/}")
+  done
+  if [ -n "$MONOREPO_DIR" ] && [ -d "$MONOREPO_DIR" ]; then
+    roots+=("$(cd "$MONOREPO_DIR" && pwd)")
+  fi
+  for r in ${roots[@]+"${roots[@]}"}; do
+    abs=$(cd "$r" 2>/dev/null && pwd) || continue
+    # $MONOREPO_DIR is often also a repo in $WORKSPACE; list it once.
+    case ":$seen:" in *":$abs:"*) continue ;; esac
+    seen="$seen:$abs"
+    for d in "$abs/$WORKTREES_SUBDIR"/*/; do
+      [ -d "$d" ] && printf '%s\n' "${d%/}"
+    done
+  done
+}
 
 # compute the tmux session name the way zsh/tmux-workflows.zsh:tat() does:
 # basename(parent of git_common_dir) -- branch, with dots replaced by dashes
@@ -64,12 +89,25 @@ _cleanup_worktree() {
   fi
 }
 
-# targeted cleanup: pass a dir name to remove a single worktree
+# targeted cleanup: pass a path, or a worktree dir name to match in any repo
 if [ $# -gt 0 ]; then
-  target="$WORKTREES_DIR/$1"
-  if [ ! -d "$target" ]; then
-    echo "ERROR: $target does not exist"
-    exit 1
+  if [ -d "$1" ]; then
+    target=$(cd "$1" && pwd)
+  else
+    matches=$(_all_worktree_dirs | while IFS= read -r d; do
+      [ "$(basename "$d")" = "$1" ] && printf '%s\n' "$d"
+    done)
+    count=$(printf '%s' "$matches" | grep -c . || true)
+    if [ "$count" -eq 0 ]; then
+      echo "ERROR: no worktree named '$1' under $WORKSPACE"
+      exit 1
+    fi
+    if [ "$count" -gt 1 ]; then
+      echo "ERROR: '$1' is ambiguous — pass a path instead:"
+      printf '%s\n' "$matches" | sed 's/^/  /'
+      exit 1
+    fi
+    target="$matches"
   fi
   if [ ! -e "$target/.git" ]; then
     echo "ERROR: $target is not a git worktree"
@@ -79,7 +117,12 @@ if [ $# -gt 0 ]; then
   exit 0
 fi
 
-for dir in "$WORKTREES_DIR"/*/; do
+worktrees=()
+while IFS= read -r dir; do
+  [ -n "$dir" ] && worktrees+=("$dir")
+done < <(_all_worktree_dirs)
+
+for dir in ${worktrees[@]+"${worktrees[@]}"}; do
   [ -e "$dir/.git" ] || continue
 
   branch=$(git -C "$dir" branch --show-current 2>/dev/null)

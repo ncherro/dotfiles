@@ -18,7 +18,7 @@ matching line in a 10,000-line grep dump is not.
 Directories that a merge has moved are resolved to where they are now, via the
 `absorbed` provenance in .session.json.
 
-Env: NOTES_DIR, NOTES_KB, WORKTREES_DIR, MONOREPO_DIR
+Env: NOTES_DIR, NOTES_KB, WORKSPACE, MONOREPO_DIR
 """
 
 import json

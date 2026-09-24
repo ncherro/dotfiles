@@ -2,3 +2,6 @@
 .claude
 zsh_plugins.zsh
 .zshrc.local
+
+# Left behind by tools that rewrite a shell rc in place
+*.bak
