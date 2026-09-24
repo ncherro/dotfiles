@@ -89,7 +89,7 @@ _git_default_branch() {
 #
 # The one place a session name is derived, because tat, gwt, code and resume
 # all have to agree on it. They did not: two of them left the branch's slashes
-# in, so `gwt nicholash/TSG-917-x` and `code nicholash/TSG-917-x` produced two
+# in, so `gwt you/PROJ-1-thing` and `code you/PROJ-1-thing` produced two
 # different sessions for the same worktree, and both showed up in the chooser.
 # Slashes and dots both flatten to dashes -- tmux treats a slash as ordinary in
 # a session name but a colon-or-slash target is ambiguous to read, and dots
@@ -1637,10 +1637,9 @@ resume() {
     return 0
   fi
 
-  # What tells these apart is the tail of the name, not the head:
-  # INCIDENT-24468-narrowing-panels and INCIDENT-24468-all-time-window-
-  # normalization differ in their last word. So the column is wide, and what
-  # does not fit is cut off the front.
+  # What tells these apart is the tail of the name, not the head: branches
+  # cut from one ticket share a long prefix and differ in their last word.
+  # So the column is wide, and what does not fit is cut off the front.
   local row kind sess cwd live ts age ctx name flags link detail line
   local -a menu parts
   for row in "${cands[@]}"; do

@@ -13,12 +13,27 @@
 #
 # Session names are <repo>--<user>-<branch> or notes--<slug>, so the left two
 # thirds of every line is the same text repeated. Tag the kind, strip the
-# prefix, and spend the width on what differs. Adjust STRIP for another repo.
+# prefix, and spend the width on what differs.
+#
+# The patterns are derived rather than written down: the repo is whatever
+# precedes the first "--" (every name is built that way by
+# _tmux_session_name), and the branch prefix is your own username. Nothing
+# here needs editing on another machine, and no repo or user name is baked
+# into a file that gets pushed.
 
 set -uo pipefail
 
-STRIP='s|^notes--||; s|^services-pilot--||; s|^nicholash[-/]||'
+ME=$(id -un)
 NAME_WIDTH=44
+
+# <repo>--<branch> -> <branch>, then drop your own branch prefix. Parameter
+# expansion rather than a regex: the repo name contains dashes itself, so
+# "up to the first --" is the boundary, and no pattern for that is readable.
+shorten() {
+  local n="${1#*--}"
+  n="${n#"$ME"-}"
+  printf '%s' "${n#"$ME"/}"
+}
 
 rows() {
   local ts att wins when sess tag short procs
@@ -30,7 +45,7 @@ rows() {
           pr-*)        tag=pr    ;;
           *)           tag=wt    ;;
         esac
-        short=$(printf '%s' "$sess" | sed -E "$STRIP")
+        short=$(shorten "$sess")
         procs=$(tmux list-windows -t "=$sess" -F '#{pane_current_command}' 2>/dev/null \
           | grep -vE '^(zsh|bash|sh|login)$' | sort -u | tr '\n' ' ')
         # Display, then the real name hidden behind a tab for the picker.
