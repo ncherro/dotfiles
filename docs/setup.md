@@ -23,8 +23,6 @@ ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
 ln -s ~/Projects/dotfiles/gitignore_global ~/.gitignore
 mkdir -p ~/.config/kitty
 ln -s ~/Projects/dotfiles/kitty.conf ~/.config/kitty/kitty.conf
-mkdir -p ~/.claude
-ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
 
 # Vim plugins
 curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
@@ -53,8 +51,6 @@ RC
 ln -s ~/Projects/dotfiles/tmux.conf ~/.tmux.conf
 ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
 ln -s ~/Projects/dotfiles/gitignore_global ~/.gitignore
-mkdir -p ~/.claude
-ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
 
 # Vim plugins
 curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
