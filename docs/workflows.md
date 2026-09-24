@@ -1,6 +1,6 @@
 [← dotfiles](../README.md)
 
-# tmux-workflows
+# Workflows
 
 `zsh/tmux-workflows.zsh` is a standalone plugin that bundles the tmux session management, git worktree, PR review, and notes workflows. It can be sourced independently from the rest of these dotfiles.
 
