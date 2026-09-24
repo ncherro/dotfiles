@@ -14,7 +14,7 @@
 
 set -uo pipefail
 
-: "${REVIEWS_DIR:="$HOME/workspace/_notes/reviews"}"
+: "${REVIEWS_DIR:="$HOME/workspace/_reviews"}"
 
 kind="${1:-}"
 dir="${2:-}"

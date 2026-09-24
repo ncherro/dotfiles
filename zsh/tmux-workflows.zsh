@@ -28,7 +28,7 @@
 # Override these in your .zshrc before sourcing this file.
 : ${WORKSPACE:="$HOME/workspace"}
 : ${NOTES_DIR:="$WORKSPACE/_notes"}
-: ${REVIEWS_DIR:="$NOTES_DIR/reviews"}
+: ${REVIEWS_DIR:="$WORKSPACE/_reviews"}
 : ${GWT_SPARSE_CHECKOUT_CMD:=""}
 
 # Knowledge base that `notes` routes against, and the helpers that read it.
