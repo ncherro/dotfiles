@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Merge scratch dirs into one, keeping every pointer into them intact.
 
-    notes-merge --target distribution-api \\
-                --absorb distro-api \\
-                --absorb distro-api-episode-status=episode-status \\
+    notes-merge --target administration-api \\
+                --absorb admin-api \\
+                --absorb admin-api-user-status=user-status \\
                 [--apply]
 
 Dry run unless --apply is given. Decides nothing: which dirs belong together,
@@ -79,9 +79,9 @@ def same_word(a, b):
     """Whether two slug tokens name the same thing.
 
     Prefix matching is not enough: the abbreviations in play here diverge from
-    the word they shorten (`distro` vs `distribution` part company at the sixth
+    the word they shorten (`admin` vs `administration` part company at the sixth
     character), so compare shared prefix length instead. Five is conservative --
-    it pairs distro/distribution and ep/episode's longer forms, but not
+    it pairs admin/administration and ep/episode's longer forms, but not
     api/apollo."""
     if a == b:
         return True
@@ -94,7 +94,7 @@ def same_word(a, b):
 
 
 def default_subdir(target, slug):
-    """`distro-api-episode-status` under `distribution-api` -> `episode-status`.
+    """`admin-api-user-status` under `administration-api` -> `user-status`.
 
     Strips leading tokens the target already says, so subdir names read as what
     distinguishes them rather than repeating their parent. A guess -- the caller
@@ -124,8 +124,8 @@ def iter_text_files(root):
 def reference_pattern(slug):
     """`_notes/<slug>` not followed by another slug character.
 
-    The boundary matters: without it, rewriting `_notes/distro-api` would
-    corrupt every `_notes/distro-api-migrations` reference in the same file."""
+    The boundary matters: without it, rewriting `_notes/admin-api` would
+    corrupt every `_notes/admin-api-migrations` reference in the same file."""
     return re.compile(r"_notes/" + re.escape(slug) + r"(?![A-Za-z0-9._-])")
 
 
