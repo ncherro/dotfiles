@@ -31,8 +31,10 @@ Nothing is deleted. Every change is captured in an undo script under
 $NOTES_DIR/.merge-undo/<timestamp>/, including byte-for-byte backups of every
 file edited.
 
-Env: NOTES_DIR (default ~/workspace/_notes)
-     NOTES_KB  (default ~/workspace/notes-kb)
+Env: WORKSPACE (default ~/workspace)
+     NOTES_DIR (default $WORKSPACE/_notes)
+     NOTES_KB  (default $WORKSPACE/notes-kb)
+     MONOREPO_DIR, WORKTREES_SUBDIR -- where to look for linked worktrees
 """
 
 import argparse
@@ -46,8 +48,10 @@ import time
 from pathlib import Path
 
 HOME = Path.home()
-NOTES_DIR = Path(os.environ.get("NOTES_DIR", HOME / "workspace/_notes"))
-NOTES_KB = Path(os.environ.get("NOTES_KB", HOME / "workspace/notes-kb"))
+WORKSPACE = Path(os.environ.get("WORKSPACE", HOME / "workspace"))
+NOTES_DIR = Path(os.environ.get("NOTES_DIR", WORKSPACE / "_notes"))
+NOTES_KB = Path(os.environ.get("NOTES_KB", WORKSPACE / "notes-kb"))
+WORKTREES_SUBDIR = os.environ.get("WORKTREES_SUBDIR") or ".worktrees"
 
 PRUNE = {"node_modules", ".git", ".venv", "__pycache__", "target", "dist"}
 # Files worth rewriting references in. Anything else is data.
@@ -159,15 +163,24 @@ def plan_rewrites(moves, search_roots):
 
 
 def worktree_roots(extra):
-    """Where linked worktrees live: whatever was passed, plus the defaults from
-    tmux-workflows.zsh."""
+    """Where linked worktrees live: whatever was passed, else the `.worktrees`
+    dir of every repo in $WORKSPACE, the layout tmux-workflows.zsh creates."""
     roots = [Path(e).expanduser() for e in extra]
     if not roots:
-        env_wt = os.environ.get("WORKTREES_DIR")
-        roots.append(Path(env_wt).expanduser() if env_wt else HOME / "worktrees")
+        repos = sorted(WORKSPACE.iterdir()) if WORKSPACE.is_dir() else []
         monorepo = os.environ.get("MONOREPO_DIR")
         if monorepo:
-            roots.append(Path(monorepo).expanduser() / ".worktrees")
+            repos.append(Path(monorepo).expanduser())
+        seen = set()
+        for repo in repos:
+            try:
+                repo = repo.resolve()
+            except OSError:
+                continue
+            if repo in seen or not repo.is_dir():
+                continue
+            seen.add(repo)
+            roots.append(repo / WORKTREES_SUBDIR)
     return [r for r in roots if r.is_dir()]
 
 
@@ -227,7 +240,7 @@ def main():
                          "this, a live session blocks the merge")
     ap.add_argument("--worktrees", action="append", default=[], metavar="DIR",
                     help="where to look for linked worktrees; defaults to "
-                         "$WORKTREES_DIR and $MONOREPO_DIR/.worktrees")
+                         "the .worktrees dir of every repo in $WORKSPACE")
     args = ap.parse_args()
 
     target = args.target.strip("/")

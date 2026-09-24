@@ -15,6 +15,7 @@ tmux.conf
 vimrc
 kitty.conf
 gitconfig
+gitignore_global       # symlinked to ~/.gitignore (core.excludesfile)
 claude/settings.json   # symlinked to ~/.claude/settings.json
 ```
 
@@ -31,9 +32,14 @@ claude/settings.json   # symlinked to ~/.claude/settings.json
 ### Symlinks
 
 ```sh
-ln -s ~/Projects/dotfiles/zshrc ~/.zshrc
+# ~/.zshrc is a real file, not a symlink: corporate tooling that rewrites a
+# shell rc in place would otherwise write straight into this repo.
+cat > ~/.zshrc <<'RC'
+source ~/Projects/dotfiles/zshrc
+RC
 ln -s ~/Projects/dotfiles/tmux.conf ~/.tmux.conf
 ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
+ln -s ~/Projects/dotfiles/gitignore_global ~/.gitignore
 mkdir -p ~/.config/kitty
 ln -s ~/Projects/dotfiles/kitty.conf ~/.config/kitty/kitty.conf
 mkdir -p ~/.claude

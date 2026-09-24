@@ -8,14 +8,10 @@ esac
 source $DOTFILES/zsh/base.zsh
 source $DOTFILES/zsh/tmux-workflows.zsh
 
-# Spotify devex tooling (auto-managed by path_updater_lib.sh — do not remove)
-# re-added automatically if removed -_-
+export PATH="$HOME/.local/bin:$PATH"
 
 # Machine-local overrides (gitignored)
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
-
-export PATH="$HOME/.local/bin:$PATH"
-export PATH=/opt/spotify-devex/bin:$PATH
 
 # A restart takes every tmux session with it, and the shell that comes back
 # gives no sign that anything is missing.

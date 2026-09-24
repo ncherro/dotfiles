@@ -14,9 +14,12 @@ alias gpc='git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD 2> 
 alias gd='git add -N . && git diff && git reset'
 alias gs='git switch'
 unalias gfr 2>/dev/null
+# Rebase on the latest default branch. The monorepo needs its own fetch command
+# (see MONOREPO_FETCH_CMD in tmux-workflows.zsh); everything else is plain git.
 gfr() {
-  if [[ "$(git rev-parse --show-toplevel 2>/dev/null)" == "$HOME/workspace/services-pilot" ]]; then
-    spt git:fetch-local && git rebase
+  if [[ -n "$MONOREPO_DIR" && -n "$MONOREPO_FETCH_CMD" \
+        && "$(git rev-parse --show-toplevel 2>/dev/null)" == "${MONOREPO_DIR:A}" ]]; then
+    eval "$MONOREPO_FETCH_CMD" && git rebase
   else
     git pull --rebase "$@"
   fi
