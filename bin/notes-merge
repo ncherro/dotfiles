@@ -3,7 +3,7 @@
 
     notes-merge --target administration-api \\
                 --absorb admin-api \\
-                --absorb admin-api-item-status=item-status \\
+                --absorb admin-api-user-status=user-status \\
                 [--apply]
 
 Dry run unless --apply is given. Decides nothing: which dirs belong together,
@@ -94,7 +94,7 @@ def same_word(a, b):
 
 
 def default_subdir(target, slug):
-    """`admin-api-item-status` under `administration-api` -> `item-status`.
+    """`admin-api-user-status` under `administration-api` -> `user-status`.
 
     Strips leading tokens the target already says, so subdir names read as what
     distinguishes them rather than repeating their parent. A guess -- the caller

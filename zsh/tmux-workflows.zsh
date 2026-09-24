@@ -1267,8 +1267,8 @@ code() {
   local is_monorepo=0
   [[ -n "$MONOREPO_DIR" && "$repo_root" == "${MONOREPO_DIR:A}" ]] && is_monorepo=1
 
-  # Components are repo-relative paths (system-a/component-b),
-  # not bare directory names. `mono git:worktree add -c` accepts a name that
+  # Components are repo-relative paths (<system>/<component>), not bare
+  # directory names. `mono git:worktree add -c` accepts a name that
   # matches nothing, writes it as a top-level cone pattern and reports
   # "Worktree ready" — leaving a worktree with none of the code in it.
   if (( is_monorepo && ${#components[@]} )) && command -v mono &>/dev/null; then
