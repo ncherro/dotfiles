@@ -18,12 +18,12 @@ source /path/to/tmux-workflows.zsh
 |------|-------------|-------|
 | `tmux` | all | Session management backbone |
 | `git` | all | Worktrees, branch detection, repo navigation |
-| `gh` | `ghp`, `review-*`, `worktree-cleanup.sh` | GitHub CLI |
+| `gh` | `ghp`, `review-*`, `worktree-gc` | GitHub CLI |
 | `jq` | `review-*`, `notes`, `code`, `wip`, `resume`, `notes-gc` | reads and writes the session metadata |
 | `fzf` | `notes`, `resume` | the pickers; `notes` falls back to create-without-prompting if absent, `resume` needs it |
 | `python3` | `notes`, `wip`, `resume`, `notes-gc`, `recall` | the `bin/notes-*` helpers |
 | `rg` | `recall` | searches ~325 MB of transcripts in about a second |
-| `claude` | `review-pr`, `code` | [Claude Code](https://claude.ai/code) CLI |
+| `claude` | `review`, `code` | [Claude Code](https://claude.ai/code) CLI |
 
 ## Configuration
 
@@ -36,7 +36,7 @@ Set these before sourcing to override defaults:
 | `NOTES_DIR` | `$WORKSPACE/_notes` | Research notes directory |
 | `REVIEWS_DIR` | `$WORKSPACE/_reviews` | PR review artifacts directory |
 | `NOTES_KB` | `$WORKSPACE/notes-kb` | Knowledge base `notes` routes against. Unset it to fall back to plain directory-name matching |
-| `MONOREPO_DIR` | *(empty)* | Repo whose worktrees go through `spt git:worktree` rather than plain git. Also enables monorepo cleanup in `worktree-cleanup.sh` |
+| `MONOREPO_DIR` | *(empty)* | Repo whose worktrees go through `spt git:worktree` rather than plain git. Also enables monorepo cleanup in `worktree-gc` |
 | `MONOREPO_FETCH_CMD` | *(empty)* | How `gfr` fetches `$MONOREPO_DIR` before rebasing (e.g. `spt git:fetch-local`). Unset → plain `git pull --rebase` everywhere |
 | `REVIEW_GH_HOST` | `github.com` | Host the PR review workflow calls, passed as `GH_HOST` (e.g. a GitHub Enterprise hostname) |
 | `REVIEW_DEFAULT_OWNER` | *(empty)* | Org assumed for review dirs predating `.review-meta.json`. Unset → those dirs report "could not fetch PR status" rather than guessing |
@@ -48,28 +48,66 @@ Set these before sourcing to override defaults:
 
 ## Functions
 
+### Orientation
+
+Where was I, and what is still open.
+
 | Function | Description |
 |----------|-------------|
+| `wip [--state]` | Notes, worktrees and reviews currently in flight; `--state` adds dirty/merged at a `git status` per worktree |
+| `recall <terms>` | Which directory was I working on that in — searches what you said, not what things are called |
+
+### Sessions
+
+| Function | Description |
+|----------|-------------|
+| `tls` | List tmux sessions, newest first, highlighting ones with active processes |
 | `tat [dir]` | Create or attach to a tmux session named after the repo/branch |
 | `tatt <name>` | Fuzzy-match and attach to an existing tmux session |
-| `tls` | List tmux sessions, newest first, highlighting ones with active processes |
+| `resume` | Reopen the tmux sessions a reboot took out — pick from what was recently active |
+
+See [Sessions](sessions.md) for how names are derived and what the picker shows.
+
+### Knowledge base
+
+Investigations: the directory, the question, and what it gets distilled into.
+
+| Function | Description |
+|----------|-------------|
+| `notes <topic>` | Open a research workspace, routed against the knowledge base |
+| `notes-gc` | Prune notes dirs that hold nothing; report ones never distilled |
+| `notes-reindex` | Rebuild the knowledge base routing table now |
+
+See [Notes and the knowledge base](notes.md).
+
+### Coding
+
+| Function | Description |
+|----------|-------------|
+| `code <branch> -p "<task>"` | Start a coding session from a notes dir: worktree, detached tmux session, Claude launched with `--add-dir` back to the notes |
 | `gwt [branch] [service]` | Create a git worktree, optionally sparse checkout, open in tmux |
-| `ws [dir]` | cd into `$WORKSPACE` |
 | `wt [branch]` | cd into the current repo's `.worktrees`, or into one worktree of it |
+
+See [Worktrees](worktrees.md) for the layout these create.
+
+### Reviews
+
+| Function | Description |
+|----------|-------------|
+| `review <url>` | Review a PR in a dedicated tmux session with Claude Code (`review-pr` is an alias) |
+| `review-status` | State of every tracked review: new commits, replies, merged |
+| `review-gc` | Drop review dirs whose PRs are merged or closed |
+
+### Getting around
+
+| Function | Description |
+|----------|-------------|
+| `ws [dir]` | cd into `$WORKSPACE` |
 | `ghr` | Open the current repo on GitHub in the browser |
 | `ghp` | Open the current branch's PR in the browser |
-| `review-pr <url>` | Review a PR in a dedicated tmux session with Claude Code |
-| `review-status` | State of every tracked review: new commits, replies, merged |
-| `review-cleanup` | Drop review dirs whose PRs are merged or closed |
-| `notes <topic>` | Open a research workspace, routed against the knowledge base |
-| `code <branch> -p "<task>"` | Start a coding session from a notes dir: worktree, detached tmux session, Claude launched with `--add-dir` back to the notes |
-| `recall <terms>` | Which directory was I working on that in |
-| `wip [--state]` | Notes, worktrees and reviews currently in flight; `--state` adds dirty/merged at a `git status` per worktree |
-| `resume` | Reopen the tmux sessions a reboot took out — pick from what was recently active |
-| `notes-gc` | Prune notes dirs that hold nothing; report ones never distilled |
 
 ## Deeper
 
 - [Sessions](sessions.md) — naming, `tls`, the picker, getting back after a restart
-- [Notes and the knowledge base](notes.md) — how `notes`, `code` and `review-pr` join up
+- [Notes and the knowledge base](notes.md) — how `notes`, `code` and `review` join up
 - [Worktrees](worktrees.md) — layout and cleanup

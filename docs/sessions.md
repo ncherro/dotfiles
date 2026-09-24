@@ -42,7 +42,7 @@ out what was in flight from the same three places `wip` reads:
 - the review dirs, as a single `pr-reviews` session
 
 You pick from that list; it creates one detached tmux session per pick, named
-exactly as `notes`, `code` and `review-pr` would have named it, opened at the
+exactly as `notes`, `code` and `review` would have named it, opened at the
 right directory. Nothing is launched inside them.
 
 Two consequences of deriving rather than restoring: a crash loses nothing,
