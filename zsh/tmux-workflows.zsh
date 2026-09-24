@@ -696,7 +696,8 @@ review-gc() {
   local reviews_dir="${REVIEWS_DIR}"
   local -a to_remove
 
-  for dir in "$reviews_dir"/*/; do
+  # (/N): directories only, and no error when there are none to collect.
+  for dir in "$reviews_dir"/*(/N); do
     [[ -d "$dir" ]] || continue
     local dirname=$(basename "$dir")
     local meta="${dir}.review-meta.json"
