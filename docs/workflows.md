@@ -96,7 +96,7 @@ See [Worktrees](worktrees.md) for the layout these create.
 |----------|-------------|
 | `review <url>` | Review a PR in the `pr-reviews` session with Claude Code (`review-pr` is an alias) |
 | `review` | Open that session with `review-status` already running in it |
-| `review-status` | State of every tracked review: new commits, replies, merged |
+| `review-status` | State of every tracked review: new commits, replies, merged. `--windows` also opens a tmux window per review still wanting work |
 | `review-gc` | Drop review dirs whose PRs are merged or closed |
 
 ### Getting around
