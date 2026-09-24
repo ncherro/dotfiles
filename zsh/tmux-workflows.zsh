@@ -85,17 +85,33 @@ _git_default_branch() {
 
 # --- Tmux session management ---
 
-# List tmux sessions, highlighting ones running processes
+# Sets REPLY to the tmux session name for a checkout.
+#
+# The one place a session name is derived, because tat, gwt, code and resume
+# all have to agree on it. They did not: two of them left the branch's slashes
+# in, so `gwt nicholash/TSG-917-x` and `code nicholash/TSG-917-x` produced two
+# different sessions for the same worktree, and both showed up in the chooser.
+# Slashes and dots both flatten to dashes -- tmux treats a slash as ordinary in
+# a session name but a colon-or-slash target is ambiguous to read, and dots
+# break `-t` matching outright.
+_tmux_session_name() {
+  local name="$1"
+  [[ -n "${2:-}" ]] && name="${1}--${2}"
+  name="${name//\//-}"
+  REPLY="${name//./-}"
+}
+
+# List tmux sessions, newest first, highlighting ones running processes
+#
+# The implementation is bin/tmux-sessions, because `prefix + s` needs the same
+# list from inside tmux and a popup cannot call a zsh function.
 tls() {
-  tmux ls -F '#{session_name}' 2>/dev/null | while read -r session; do
-    procs=$(tmux list-windows -t "$session" -F '#{pane_current_command}' \
-      | grep -v '^zsh$' | tr '\n' ' ')
-    if [[ -n "$procs" ]]; then
-      echo "⚡ $session: $procs"
-    else
-      echo "  $session"
-    fi
-  done
+  local bin="${NOTES_BIN}/tmux-sessions"
+  if [[ ! -x "$bin" ]]; then
+    echo "tls: $bin not found"
+    return 1
+  fi
+  "$bin" "$@"
 }
 
 # Attach to a tmux session by fuzzy name match
@@ -122,14 +138,14 @@ tat() {
     local dirname=$(basename "$(dirname "$git_common_dir")")
     if [[ "$git_dir" != "$git_common_dir" ]]; then
       local branch=$(git rev-parse --abbrev-ref HEAD)
-      session_name="${dirname}--${branch}"
+      _tmux_session_name "$dirname" "$branch"
     else
-      session_name=$dirname
+      _tmux_session_name "$dirname"
     fi
   else
-    session_name=${PWD##*/}
+    _tmux_session_name "${PWD##*/}"
   fi
-  session_name=${session_name//./-}
+  session_name=$REPLY
   if tmux ls 2>/dev/null | grep -q "^${session_name}:"; then
     if [[ -n "$TMUX" ]]; then
       tmux switch-client -t "$session_name"
@@ -346,9 +362,9 @@ gwt() {
     return
   fi
 
-  # Match tat's session naming convention: dirname--branch with dots → dashes.
-  local session_name="${root}--${branch}"
-  session_name=${session_name//./-}
+  local session_name
+  _tmux_session_name "$root" "$branch"
+  session_name=$REPLY
 
   if ! tmux has-session -t "$session_name" 2>/dev/null; then
     tmux new-session -d -s "$session_name" -c "$dest"
@@ -1121,8 +1137,8 @@ code() {
 
   local repo_name="${repo_root:t}"
   local dest session_name
-  session_name="${repo_name}--${branch//\//-}"
-  session_name=${session_name//./-}
+  _tmux_session_name "$repo_name" "$branch"
+  session_name=$REPLY
 
   dest=$(_worktree_path "$repo_root" "$branch")
   if [[ -z "$dest" ]]; then
@@ -1471,8 +1487,8 @@ _resume_candidates() {
       fi
     fi
 
-    sess="${repo_of}--${br//\//-}"
-    sess=${sess//./-}
+    _tmux_session_name "$repo_of" "$br"
+    sess=$REPLY
     islive=0; (( ${live[(I)$sess]} )) && islive=1
     sortkey=$ts; [[ "$state" == dirty ]] && (( sortkey += 43200 ))
 
