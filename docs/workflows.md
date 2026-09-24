@@ -34,7 +34,7 @@ Set these before sourcing to override defaults:
 | `WORKSPACE` | `~/workspace` | Primary project checkout directory |
 | `WORKTREES_SUBDIR` | `.worktrees` | Directory *inside each repo* where its worktrees are created |
 | `NOTES_DIR` | `$WORKSPACE/_notes` | Research notes directory |
-| `REVIEWS_DIR` | `$NOTES_DIR/reviews` | PR review artifacts directory |
+| `REVIEWS_DIR` | `$WORKSPACE/_reviews` | PR review artifacts directory |
 | `NOTES_KB` | `$WORKSPACE/notes-kb` | Knowledge base `notes` routes against. Unset it to fall back to plain directory-name matching |
 | `MONOREPO_DIR` | *(empty)* | Repo whose worktrees go through `spt git:worktree` rather than plain git. Also enables monorepo cleanup in `worktree-cleanup.sh` |
 | `MONOREPO_FETCH_CMD` | *(empty)* | How `gfr` fetches `$MONOREPO_DIR` before rebasing (e.g. `spt git:fetch-local`). Unset → plain `git pull --rebase` everywhere |

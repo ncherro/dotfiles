@@ -7,7 +7,7 @@ set -euo pipefail
 : "${WORKSPACE:="$HOME/workspace"}"
 : "${WORKTREES_SUBDIR:=".worktrees"}"
 : "${MONOREPO_DIR:=""}"
-: "${REVIEWS_DIR:="$WORKSPACE/_notes/reviews"}"
+: "${REVIEWS_DIR:="$WORKSPACE/_reviews"}"
 : "${NOTES_DIR:="$WORKSPACE/_notes"}"
 
 # Every worktree under a repo in $WORKSPACE, plus $MONOREPO_DIR when it lives
