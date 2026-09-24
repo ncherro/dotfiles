@@ -71,7 +71,7 @@ others.
 | `resume` | Reopen the sessions a reboot took out |
 | `tls` / `prefix + s` | The session list, and the picker |
 
-- [tmux-workflows](docs/tmux-workflows.md) — dependencies, configuration, and
+- [Workflows](docs/workflows.md) — dependencies, configuration, and
   the full function reference
 - [Sessions](docs/sessions.md) — how sessions are named, the aligned list, and
   getting back to work after a restart
