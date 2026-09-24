@@ -2,7 +2,7 @@
 
 ## Notes, code, and the knowledge base
 
-`notes`, `code` and `review-pr` all produce the same shape of thing: a
+`notes`, `code` and `review` all produce the same shape of thing: a
 directory, a tmux session, and a Claude transcript. They are joined by a
 metadata file — `.session.json` in a notes dir, `.review-meta.json` in a review
 dir, `.notes-link` at a worktree root — which is what lets `wip`, `notes-gc` and

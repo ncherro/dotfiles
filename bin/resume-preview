@@ -54,7 +54,7 @@ case "$kind" in
 
   review)
     echo "── $REVIEWS_DIR"
-    echo "One session, one window per review — review-pr opens them again."
+    echo "One session, one window per review — review opens them again."
     echo
     # Ordered by when each was last reviewed, which is not the same as the
     # dir's mtime: re-reviewing a PR rewrites the metadata in place.

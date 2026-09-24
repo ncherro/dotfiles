@@ -4,7 +4,7 @@
 # Source this file from your .zshrc:
 #   source /path/to/tmux-workflows.zsh
 #
-# Prerequisites: tmux, git, gh (GitHub CLI), claude (for review-pr)
+# Prerequisites: tmux, git, gh (GitHub CLI), claude (for review)
 #   jq        session/review metadata
 #   fzf       the notes and resume pickers
 #   python3   bin/notes-index, which joins the notes dirs to the knowledge base
@@ -12,7 +12,7 @@
 # Workflows:
 #   notes <topic>        open or create an investigation, routed against the KB
 #   code <branch> -p …   start a coding session from one, in a linked worktree
-#   review-pr <url>      review a PR in its own tmux window
+#   review <url>         review a PR in its own tmux window
 #   wip                  what am I in the middle of
 #   resume               reopen the tmux sessions a reboot took out
 #   recall <terms>       which dir was I working on that in
@@ -448,10 +448,14 @@ _review_infer_from_dirname() {
 }
 
 # Review a PR in a dedicated tmux session with Claude Code
-review-pr() {
+#
+# The bare name is the primary action, matching `notes`; review-status and
+# review-gc are the auxiliaries. `review-pr` stays as an alias for muscle
+# memory and because the Claude command is still called /review-pr.
+review() {
   local url="$1"
   if [[ -z "$url" ]]; then
-    echo "Usage: review-pr <PR-URL>"
+    echo "Usage: review <PR-URL>"
     return 1
   fi
 
@@ -521,6 +525,8 @@ EOF
     tmux attach-session -t "${session}:${window}"
   fi
 }
+
+alias review-pr=review
 
 # Show status of all tracked PR reviews
 review-status() {
@@ -685,7 +691,7 @@ review-status() {
 }
 
 # Remove review dirs for merged/closed PRs
-review-cleanup() {
+review-gc() {
   setopt local_options typeset_silent no_xtrace no_verbose
   local reviews_dir="${REVIEWS_DIR}"
   local -a to_remove
@@ -736,7 +742,7 @@ review-cleanup() {
 # --- Workflow: Notes ---
 #
 # A notes dir carries `.session.json`, mirroring the `.review-meta.json` that
-# review-pr already writes. It is the join key between a scratch dir, the
+# review already writes. It is the join key between a scratch dir, the
 # worktrees that investigation spawned, and the knowledge base topic it
 # distills into. `notes-index` reads it; `code` and `/wrap` write to it.
 
@@ -872,7 +878,6 @@ _notes_resolve() {
 #   notes <topic>                       resolve against the KB, open or create
 #   notes <topic> -q "<question>"       record what the session is actually asking
 #   notes <topic> -t <kb-topic>         attach to a KB topic explicitly
-#   notes --reindex                     rebuild the routing table now
 notes() {
   local question="" topic=""
   local -a positional
@@ -885,9 +890,6 @@ notes() {
       -t|--topic)
         if [[ -z "$2" ]]; then echo "notes: -t requires a value"; return 1; fi
         topic="$2"; shift 2 ;;
-      --reindex)
-        _notes_reindex && echo "notes: reindexed $NOTES_CACHE"
-        return ;;
       *)
         positional+=("$1"); shift ;;
     esac
@@ -896,7 +898,6 @@ notes() {
 
   if [[ -z "$*" ]]; then
     echo "Usage: notes <topic> [-q \"<question>\"] [-t <kb-topic>]"
-    echo "       notes --reindex"
     return 1
   fi
 
@@ -934,6 +935,11 @@ notes() {
   else
     tmux attach-session -t "$session"
   fi
+}
+
+# Rebuild the routing table now, rather than waiting for it to go stale
+notes-reindex() {
+  _notes_reindex && echo "notes: reindexed $NOTES_CACHE"
 }
 
 # Prune notes dirs that hold nothing, and report the ones that only look empty
@@ -1342,7 +1348,7 @@ _resume_transcript_mtime() {
 # TSV: kind  session  cwd  live  ts  age  context  name  flags  link
 #
 #   kind     notes | wt | review
-#   session  the tmux session name notes/code/review-pr would have used
+#   session  the tmux session name notes/code/review would have used
 #   live     1 when that session exists right now
 #   ts       last activity, epoch seconds
 #   context  knowledge base topic (notes) or repo (worktrees)
@@ -1593,7 +1599,7 @@ wip() {
 # with nothing running in them -- what you want back is the context, and the
 # processes you left behind were mid-thought anyway.
 #
-# Session names match what notes, code and review-pr would have used, so a
+# Session names match what notes, code and review would have used, so a
 # reopened session is the same session as far as every other command here is
 # concerned. Anything already open is filtered out: safe to re-run any time.
 #
@@ -1626,7 +1632,7 @@ resume() {
   # Live sessions are already back. The merged check only bites when the rows
   # carry state, which the fast path does not ask for: hiding finished
   # worktrees is not worth a git status each. They age out of the window on
-  # their own, and worktree-cleanup.sh is what actually removes them.
+  # their own, and worktree-gc is what actually removes them.
   local -a cands
   cands=( ${(f)"$(_resume_candidates --days "$days" \
     | awk -F'\t' -v cutoff=$(( EPOCHSECONDS - 86400 * days )) \

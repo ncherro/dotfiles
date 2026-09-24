@@ -26,7 +26,7 @@ zsh_plugins.txt        # antidote plugin list
 zshrc.local.example    # template for machine-local overrides
 gitignore_global       # symlinked to ~/.gitignore (core.excludesfile)
 bin/
-  worktree-cleanup.sh  # clean up merged worktrees, stale sessions, and build caches
+  worktree-gc          # prune merged worktrees, stale sessions, and build caches
   notes-index          # joins notes dirs + session metadata + knowledge base
   notes-preview        # fzf preview pane for the notes picker
   resume-preview       # fzf preview pane for the resume picker
@@ -65,7 +65,7 @@ others.
 |---|---|
 | `notes <topic>` | Open an investigation, routed against the knowledge base |
 | `code <branch> -p "<task>"` | Hand it off to a coding session in a linked worktree |
-| `review-pr <url>` | Review a PR in its own session |
+| `review <url>` | Review a PR in its own session |
 | `wip` | What am I in the middle of |
 | `recall <terms>` | Which directory was I working in |
 | `resume` | Reopen the sessions a reboot took out |
@@ -76,7 +76,7 @@ others.
 - [Sessions](docs/sessions.md) — how sessions are named, the aligned list, and
   getting back to work after a restart
 - [Notes and the knowledge base](docs/notes.md) — how `notes`, `code` and
-  `review-pr` join up, and what `bin/notes-index` knows
+  `review` join up, and what `bin/notes-index` knows
 - [Worktrees](docs/worktrees.md) — layout under `<repo>/.worktrees/`, and cleanup
 
 ## Color schemes
