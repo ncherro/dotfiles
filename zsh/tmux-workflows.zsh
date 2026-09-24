@@ -6,7 +6,7 @@
 #
 # Prerequisites: tmux, git, gh (GitHub CLI), claude (for review-pr)
 #   jq        session/review metadata
-#   fzf       the notes picker
+#   fzf       the notes and resume pickers
 #   python3   bin/notes-index, which joins the notes dirs to the knowledge base
 #
 # Workflows:
@@ -14,6 +14,7 @@
 #   code <branch> -p …   start a coding session from one, in a linked worktree
 #   review-pr <url>      review a PR in its own tmux window
 #   wip                  what am I in the middle of
+#   resume               reopen the tmux sessions a reboot took out
 #   recall <terms>       which dir was I working on that in
 #   notes-gc             prune notes dirs that hold nothing
 #
@@ -26,7 +27,6 @@
 # --- Config ---
 # Override these in your .zshrc before sourcing this file.
 : ${WORKSPACE:="$HOME/workspace"}
-: ${WORKTREES_DIR:="$HOME/worktrees"}
 : ${NOTES_DIR:="$WORKSPACE/_notes"}
 : ${REVIEWS_DIR:="$NOTES_DIR/reviews"}
 : ${GWT_SPARSE_CHECKOUT_CMD:=""}
@@ -38,9 +38,29 @@
 : ${NOTES_CACHE:="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-workflows/notes-routing.tsv"}
 : ${NOTES_REDIRECTS:="${NOTES_CACHE:h}/notes-redirects.tsv"}
 
-# Repo whose worktrees are managed by `spt git:worktree` rather than plain git,
-# so they inherit sparse checkout and get a Bazel output base.
+# Repo whose worktrees are created by `spt git:worktree` rather than plain git,
+# so they inherit sparse checkout and get a Bazel output base. Also the repo
+# `gfr` and `code` treat as the monorepo.
 : ${MONOREPO_DIR:=""}
+
+# How to fetch the monorepo: it has its own fetch path, and a plain
+# `git pull --rebase` against it is slow enough to be unusable.
+#   MONOREPO_FETCH_CMD='spt git:fetch-local'
+: ${MONOREPO_FETCH_CMD:=""}
+
+# Where the PR review workflow talks to GitHub. Point REVIEW_GH_HOST at a
+# GitHub Enterprise hostname to review PRs there. REVIEW_DEFAULT_OWNER is the
+# org assumed for review dirs that predate .review-meta.json; with it unset
+# those dirs report "could not fetch PR status" rather than guessing an org.
+: ${REVIEW_GH_HOST:="github.com"}
+: ${REVIEW_DEFAULT_OWNER:=""}
+
+# Worktrees live inside the repo they belong to, at <repo>/.worktrees/<branch>
+# (slashes in the branch flattened to dashes). Nothing to manage but the repo
+# itself, and a worktree's repo is its grandparent dir rather than something
+# decoded out of a mangled directory name. Add `.worktrees/` to your global
+# gitignore (see gitignore_global) so the repo never reads as dirty.
+: ${WORKTREES_SUBDIR:=".worktrees"}
 
 # --- Dependency check ---
 for _twf_cmd in tmux git gh jq fzf rg; do
@@ -49,6 +69,11 @@ for _twf_cmd in tmux git gh jq fzf rg; do
   fi
 done
 unset _twf_cmd
+
+# Builtins rather than forks: wip and resume ask for a directory mtime and
+# the current time once per worktree.
+zmodload -F zsh/stat b:zstat 2>/dev/null
+zmodload -F zsh/datetime p:EPOCHSECONDS 2>/dev/null
 
 # --- Helpers ---
 
@@ -122,7 +147,38 @@ tat() {
 
 # --- Git worktrees ---
 
-# Create or switch to a git worktree in $WORKTREES_DIR
+# Where a worktree for branch $2 of the repo at $1 belongs.
+_worktree_path() { print -r -- "${1}/${WORKTREES_SUBDIR}/${2//\//-}"; }
+
+# The main checkout, from anywhere inside a repo or any of its worktrees.
+# --git-common-dir can come back relative, so resolve it from the dir asked
+# about rather than from $PWD.
+_main_repo_root() {
+  local dir="${1:-$PWD}" common
+  common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || return 1
+  common=$(cd "$dir" && cd "$common" && pwd) || return 1
+  print -r -- "${common:h}"
+}
+
+# Whether $1 (default $PWD) is inside a worktree rather than a main checkout.
+_in_worktree() { [[ "${1:-$PWD}" == */${WORKTREES_SUBDIR}/* ]]; }
+
+# Every worktree on the machine: the repos in $WORKSPACE, plus $MONOREPO_DIR
+# when it lives outside it.
+_all_worktree_dirs() {
+  local -a roots seen out
+  roots=( "$WORKSPACE"/*(/N) )
+  [[ -n "$MONOREPO_DIR" && -d "$MONOREPO_DIR" ]] && roots+=( "${MONOREPO_DIR:A}" )
+  local r d
+  for r in "${roots[@]}"; do
+    (( ${seen[(I)${r:A}]} )) && continue
+    seen+=( "${r:A}" )
+    for d in "${r:A}/${WORKTREES_SUBDIR}"/*(/N); do out+=( "$d" ); done
+  done
+  (( ${#out} )) && print -rl -- "${out[@]}"
+}
+
+# Create or switch to a git worktree under <repo>/.worktrees
 #
 # Usage:
 #   gwt <branch>                                       create worktree, attach tmux session
@@ -142,7 +198,7 @@ tat() {
 # iteration cycles). --yolo is right for tight scaffolding where you trust
 # the agent to run anything.
 gwt() {
-  if [[ "$PWD" == *"/worktrees/"* ]]; then
+  if _in_worktree; then
     echo "Already in a worktree"
     return 1
   fi
@@ -223,7 +279,7 @@ gwt() {
   local branch created=0
   if [[ -n "$1" ]]; then
     branch="$1"
-    local dest="${WORKTREES_DIR}/${root}--${branch//\//-}"
+    local dest=$(_worktree_path "$source_root" "$branch")
     git worktree add -b "$branch" "$dest" "$(_git_default_branch)" || return 1
     [[ ! -f "$source_root/.env" ]] || cp "$source_root/.env" "$dest/.env"
     cd "$dest" || return 1
@@ -237,7 +293,7 @@ gwt() {
       echo "On $branch — pass a branch name to create a new worktree"
       return 1
     fi
-    local dest="${WORKTREES_DIR}/${root}--${branch//\//-}"
+    local dest=$(_worktree_path "$source_root" "$branch")
     if [[ -d "$dest" ]]; then
       cd "$dest" || return 1
     else
@@ -324,8 +380,24 @@ gwt() {
 
 # cd into $WORKSPACE
 ws() { cd "$WORKSPACE/${1:-.}"; }
-# cd into $WORKTREES_DIR
-wt() { cd "$WORKTREES_DIR/${1:-.}"; }
+# cd into a worktree of the current repo, or into .worktrees with no argument.
+# Takes either the branch name or the flattened directory name.
+wt() {
+  local root
+  root=$(_main_repo_root) || { echo "wt: not in a git repository"; return 1; }
+  local base="${root}/${WORKTREES_SUBDIR}"
+  if [[ -z "$1" ]]; then
+    [[ -d "$base" ]] || { echo "wt: no worktrees in ${root:t}"; return 1; }
+    cd "$base"
+    return
+  fi
+  local dest
+  for dest in "${base}/$1" "$(_worktree_path "$root" "$1")"; do
+    [[ -d "$dest" ]] && { cd "$dest"; return; }
+  done
+  echo "wt: no such worktree in ${root:t}: $1"
+  return 1
+}
 
 # --- GitHub ---
 
@@ -356,7 +428,7 @@ _review_infer_from_dirname() {
   local dirname="$1"
   _rv_repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
   _rv_number=$(echo "$dirname" | grep -oE '[0-9]+$')
-  _rv_owner="spotify"
+  _rv_owner="$REVIEW_DEFAULT_OWNER"
 }
 
 # Review a PR in a dedicated tmux session with Claude Code
@@ -380,7 +452,7 @@ review-pr() {
   mkdir -p "$dir"
 
   local head_commit
-  head_commit=$(GH_HOST=ghe.spotify.net gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
+  head_commit=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
     --jq '.head.sha' 2>/dev/null || echo "unknown")
 
   local meta="${dir}/.review-meta.json"
@@ -465,7 +537,7 @@ review-status() {
 
   local -a attention updated open approved merged closed
   local my_login
-  my_login=$(GH_HOST=ghe.spotify.net gh api user --jq '.login' 2>/dev/null)
+  my_login=$(GH_HOST="$REVIEW_GH_HOST" gh api user --jq '.login' 2>/dev/null)
   local found=0
 
   for dir in "${review_dirs[@]}"; do
@@ -484,12 +556,12 @@ review-status() {
     else
       repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
       number=$(echo "$dirname" | grep -oE '[0-9]+$')
-      owner="spotify"
-      url="https://ghe.spotify.net/${owner}/${repo}/pull/${number}"
+      owner="$REVIEW_DEFAULT_OWNER"
+      url="https://${REVIEW_GH_HOST}/${owner}/${repo}/pull/${number}"
     fi
 
     local pr_json
-    pr_json=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}" \
+    pr_json=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
       --jq '{state: .state, merged: .merged, head: .head.sha, title: .title}' 2>/dev/null)
 
     if [[ -z "$pr_json" ]]; then
@@ -513,7 +585,7 @@ review-status() {
     else
       local my_review_state=""
       if [[ -n "$my_login" ]]; then
-        my_review_state=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
+        my_review_state=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
           --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null)
       fi
 
@@ -527,7 +599,7 @@ review-status() {
         local my_comment_ids
         my_comment_ids=$(jq -r '[.comments[].id] | join(",")' "$meta")
         local all_comments
-        all_comments=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
+        all_comments=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
           --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null)
         if [[ -n "$all_comments" ]]; then
           reply_count=$(echo "$all_comments" | jq --arg ids "$my_comment_ids" '
@@ -615,11 +687,11 @@ review-cleanup() {
     else
       repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
       number=$(echo "$dirname" | grep -oE '[0-9]+$')
-      owner="spotify"
+      owner="$REVIEW_DEFAULT_OWNER"
     fi
 
     local pr_state
-    pr_state=$(GH_HOST=ghe.spotify.net gh api "repos/${owner}/${repo}/pulls/${number}" \
+    pr_state=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
       --jq '"\(.state):\(.merged)"' 2>/dev/null)
 
     if [[ "$pr_state" == "closed:true" || "$pr_state" == "closed:false" ]]; then
@@ -996,6 +1068,23 @@ code() {
     return 1
   fi
 
+  # These helpers and NOTES_DIR come from this file and the shell profile. A
+  # non-interactive shell (Claude Code's snapshot, `zsh -c`) can have `code`
+  # without them, in which case every path below silently evaluates to "" and
+  # the session gets built in the wrong place while still reporting success.
+  local _fn
+  for _fn in _worktree_path _notes_session_init _notes_current_slug; do
+    if (( ! $+functions[$_fn] )); then
+      echo "code: required helper '$_fn' is not defined."
+      echo "      source ${DOTFILES:-$HOME/Projects/dotfiles}/zsh/tmux-workflows.zsh first."
+      return 1
+    fi
+  done
+  if [[ -z "$NOTES_DIR" ]]; then
+    echo "code: NOTES_DIR is not set — source your shell profile, or set it explicitly."
+    return 1
+  fi
+
   # Which investigation is this coding session coming out of?
   if [[ -z "$notes_slug" ]]; then
     notes_slug=$(_notes_current_slug) || {
@@ -1035,15 +1124,39 @@ code() {
   session_name="${repo_name}--${branch//\//-}"
   session_name=${session_name//./-}
 
-  # The monorepo's worktrees need sparse-checkout inheritance and a Bazel
-  # output base, which only `spt git:worktree` sets up.
+  dest=$(_worktree_path "$repo_root" "$branch")
+  if [[ -z "$dest" ]]; then
+    echo "code: could not resolve a worktree path for '$branch'."
+    return 1
+  fi
+
+  # Same destination either way; only the creation differs. The monorepo's
+  # worktrees need sparse-checkout inheritance and a Bazel output base, which
+  # only `spt git:worktree` sets up.
   local is_monorepo=0
   [[ -n "$MONOREPO_DIR" && "$repo_root" == "${MONOREPO_DIR:A}" ]] && is_monorepo=1
 
-  if (( is_monorepo )); then
-    dest="${repo_root}/.worktrees/${branch//\//-}"
-  else
-    dest="${WORKTREES_DIR}/${repo_name}--${branch//\//-}"
+  # Components are repo-relative paths (s4p-core-cms/s4p-episode-metadata),
+  # not bare directory names. `spt git:worktree add -c` accepts a name that
+  # matches nothing, writes it as a top-level cone pattern and reports
+  # "Worktree ready" — leaving a worktree with none of the code in it.
+  if (( is_monorepo && ${#components[@]} )) && command -v spt &>/dev/null; then
+    local -a known_components
+    known_components=( ${(f)"$(cd "$repo_root" && spt git:sparse list-components 2>/dev/null)"} )
+    if (( ${#known_components[@]} )); then
+      local bad=0 c
+      for c in "${components[@]}"; do
+        if (( ${known_components[(Ie)$c]} == 0 )); then
+          echo "code: unknown component '$c'"
+          bad=1
+        fi
+      done
+      if (( bad )); then
+        echo "      components are <system>/<component> paths. List them with:"
+        echo "        spt git:sparse list-components"
+        return 1
+      fi
+    fi
   fi
 
   if [[ -d "$dest" ]]; then
@@ -1058,6 +1171,19 @@ code() {
     ( cd "$repo_root" && git worktree add -b "$branch" "$dest" \
         "$(cd "$repo_root" && _git_default_branch)" ) || return 1
     [[ ! -f "$repo_root/.env" ]] || cp "$repo_root/.env" "$dest/.env"
+  fi
+
+  # Belt and braces for the above: confirm the code is actually there.
+  local _c _missing=0
+  for _c in "${components[@]}"; do
+    if [[ ! -d "$dest/$_c" ]]; then
+      echo "code: component '$_c' is not present in the worktree"
+      _missing=1
+    fi
+  done
+  if (( _missing )); then
+    echo "      fix in place with:"
+    echo "        cd $dest && spt git:sparse add <component>..."
   fi
 
   # Link the worktree back to the investigation, for /wrap from either side.
@@ -1158,99 +1284,280 @@ recall() {
 
 # --- Workflow: what am I in the middle of? ---
 
+# Sets REPLY to a human-readable age from an epoch timestamp.
+#
+# Every row is aged the same way, notes-index's own "today" included: the
+# picker is answering "when did I last touch this", and two vocabularies for
+# that in one column is just two columns.
+_resume_age() {
+  local secs=$(( EPOCHSECONDS - ${1:-0} ))
+  (( secs < 0 )) && secs=0
+  if (( secs < 3600 )); then
+    REPLY="$(( secs / 60 ))m"
+  elif (( secs < 86400 )); then
+    REPLY="$(( secs / 3600 ))h"
+  elif (( secs < 86400 * 14 )); then
+    REPLY="$(( secs / 86400 ))d"
+  else
+    REPLY="$(( secs / (86400 * 7) ))w"
+  fi
+}
+
+# Sets REPLY to when Claude was last run in a directory, or 0.
+#
+# A transcript dir is named after the path it was opened at, with /, _ and .
+# all mapped to -. For a worktree that is the truest record of recent work: the
+# checkout's own mtime does not move when a file three levels down is edited,
+# and the last commit can be days older than the session still in progress.
+_resume_transcript_mtime() {
+  local p="${1#/}"
+  p="${p//\//-}"; p="${p//_/-}"; p="${p//./-}"
+  local -a t st
+  t=( "$HOME/.claude/projects/-${p}"/*.jsonl(N.om[1]) )
+  if (( ${#t} )) && zstat -A st +mtime "${t[1]}" 2>/dev/null; then
+    REPLY=$st[1]
+  else
+    REPLY=0
+  fi
+}
+
+# Everything in flight, one row per thing, most recently touched first.
+#
+# TSV: kind  session  cwd  live  ts  age  context  name  flags  link
+#
+#   kind     notes | wt | review
+#   session  the tmux session name notes/code/review-pr would have used
+#   live     1 when that session exists right now
+#   ts       last activity, epoch seconds
+#   context  knowledge base topic (notes) or repo (worktrees)
+#   flags    unwrapped | dirty | merged | "<n> tracked"   (--rich only)
+#   link     notes dir a worktree came out of, from .notes-link
+#
+# No field is ever empty -- "-" stands in -- so readers can split on tabs
+# without losing columns.
+#
+# Nothing here runs git or python. Both were tried and both were unusable: a
+# `git status` in a sparse monorepo worktree costs 0.6-20s, and twenty of them
+# turned resume into a thirty-second hang. Everything below is stat and file
+# reads, which is enough to answer the only question a picker asks -- what did
+# I touch most recently -- in well under a second.
+#
+# What "touched" means, newest wins:
+#   notes dirs  the dir, its newest file, the Claude transcript for its path
+#   worktrees   the checkout, the gitdir's logs/HEAD (commits and checkouts),
+#               the Claude transcript. Not .git/index -- `git status` rewrites
+#               it, so it reads as activity even when nothing happened.
+#
+# --topics adds what only notes-index knows -- knowledge base topic, whether a
+# dir was ever distilled -- for about 0.8s. --state adds what only git knows --
+# dirty, merged -- for about a second per worktree, and several seconds for a
+# worktree git has not looked at in a while. wip takes the first by default and
+# the second only when asked for it.
+#
+# --days windows the notes dirs. Every worktree is always listed, because wip
+# is an inventory of them; resume applies its own window on ts.
+#
+# Sets $_resume_stale as a side effect under --topics: notes dirs left
+# undistilled from before the window, a backlog rather than work in flight.
+_resume_candidates() {
+  local days=7 topics=0 want_state=0
+  while (( $# )); do
+    case "$1" in
+      --days)   days="${2:-7}"; shift 2 ;;
+      --topics) topics=1; shift ;;
+      --state)  want_state=1; shift ;;
+      *) shift ;;
+    esac
+  done
+  local cutoff=$(( EPOCHSECONDS - 86400 * days ))
+
+  local -a live rows st f newest
+  live=( ${(f)"$(tmux ls -F '#{session_name}' 2>/dev/null)"} )
+  _resume_stale=0
+
+  # One notes-index call answers topic and wrapped for every dir at once; the
+  # rows below then join against it by slug.
+  local -A topic_of wrapped_of
+  local index=""
+  if (( topics )) && [[ -x "$NOTES_BIN/notes-index" ]] && command -v jq &>/dev/null; then
+    if index=$("$NOTES_BIN/notes-index" --json 2>/dev/null); then
+      local s_ t_ w_
+      while IFS=$'\t' read -r s_ t_ w_; do
+        topic_of[$s_]="$t_"
+        wrapped_of[$s_]="$w_"
+      # No empty fields: read(1) treats runs of tabs as one delimiter, so an
+      # empty topic would shift .wrapped into its place.
+      done < <(print -r -- "$index" | jq -r '.dirs[]
+        | [.slug,
+           (if (.topic // "") == "" then "-" else .topic end),
+           (if .wrapped then "1" else "0" end)] | @tsv')
+      _resume_stale=$(print -r -- "$index" | jq --argjson days "$days" '[.dirs[]
+        | select(.wrapped == false and .last_activity <= (now - 86400 * $days))
+        | select(.files > 0 or .transcripts > 0)] | length')
+    fi
+  fi
+
+  local d slug sess islive ts ctx flags
+  for d in "$NOTES_DIR"/*(/N); do
+    slug="${d:t}"
+    # The reviews dir lives under NOTES_DIR but is not an investigation.
+    [[ "${d:A}" == "${REVIEWS_DIR:A}" ]] && continue
+
+    ts=0
+    zstat -A st +mtime "$d" 2>/dev/null && ts=$st[1]
+    newest=( "$d"/*(N.om[1]) )
+    if (( ${#newest} )) && zstat -A st +mtime "${newest[1]}" 2>/dev/null; then
+      (( st[1] > ts )) && ts=$st[1]
+    fi
+    _resume_transcript_mtime "$d"
+    (( REPLY > ts )) && ts=$REPLY
+
+    # A dir with no files and no transcript holds nothing -- notes(1) creates
+    # them eagerly, so most of them are a name and nothing else.
+    (( ${#newest} )) || [[ $REPLY -gt 0 ]] || continue
+
+    sess="notes--${slug}"
+    islive=0; (( ${live[(I)$sess]} )) && islive=1
+    (( ts > cutoff )) || (( islive )) || continue
+
+    ctx="${topic_of[$slug]:--}"; [[ -n "$ctx" ]] || ctx="-"
+    flags="-"
+    (( topics )) && [[ "${wrapped_of[$slug]}" != "1" ]] && flags="unwrapped"
+
+    f=( "$ts" notes "$sess" "$d" "$islive" "$ts" "-" "$ctx" "$slug" "$flags" "-" )
+    rows+=( "${(pj:\t:)f}" )
+  done
+
+  local gitdir head_ref br repo_of link state sortkey
+  for d in ${(f)"$(_all_worktree_dirs)"}; do
+    # <repo>/.worktrees/<name>, so the repo is two levels up -- no need to ask
+    # git which checkout this belongs to.
+    repo_of="${d:h:h:t}"
+
+    gitdir=""
+    if [[ -f "$d/.git" ]]; then
+      gitdir="${$(<"$d/.git")#gitdir: }"
+      [[ "$gitdir" == /* ]] || gitdir="${d}/${gitdir}"
+    elif [[ -d "$d/.git" ]]; then
+      gitdir="$d/.git"
+    fi
+    [[ -r "$gitdir/HEAD" ]] || continue
+
+    head_ref="$(<"$gitdir/HEAD")"
+    if [[ "$head_ref" == ref:* ]]; then
+      br="${${head_ref#ref: }#refs/heads/}"
+    else
+      br="${head_ref[1,9]}"
+    fi
+    [[ -n "$br" ]] || continue
+
+    ts=0
+    zstat -A st +mtime "$d" 2>/dev/null && ts=$st[1]
+    if [[ -r "$gitdir/logs/HEAD" ]] && zstat -A st +mtime "$gitdir/logs/HEAD" 2>/dev/null; then
+      (( st[1] > ts )) && ts=$st[1]
+    fi
+    _resume_transcript_mtime "$d"
+    (( REPLY > ts )) && ts=$REPLY
+
+    link="-"
+    [[ -f "$d/.notes-link" ]] && link="${$(<"$d/.notes-link"):t}"
+
+    state="-"
+    if (( want_state )); then
+      if git -C "$d" merge-base --is-ancestor HEAD origin/HEAD 2>/dev/null; then
+        state="merged"
+      elif [[ -n "$(git --no-optional-locks -C "$d" status --porcelain -uno 2>/dev/null)" ]]; then
+        state="dirty"
+      fi
+    fi
+
+    sess="${repo_of}--${br//\//-}"
+    sess=${sess//./-}
+    islive=0; (( ${live[(I)$sess]} )) && islive=1
+    sortkey=$ts; [[ "$state" == dirty ]] && (( sortkey += 43200 ))
+
+    f=( "$sortkey" wt "$sess" "$d" "$islive" "$ts" "-" \
+        "$repo_of" "$br" "$state" "$link" )
+    rows+=( "${(pj:\t:)f}" )
+  done
+
+  # One session holds every review, so there is one row for the lot of them.
+  local -a review_dirs
+  review_dirs=( "$REVIEWS_DIR"/*(/N) )
+  if (( ${#review_dirs} )); then
+    local newest_review=0
+    for d in "${review_dirs[@]}"; do
+      zstat -A st +mtime "$d" 2>/dev/null || continue
+      (( st[1] > newest_review )) && newest_review=$st[1]
+    done
+    islive=0; (( ${live[(I)pr-reviews]} )) && islive=1
+    f=( "$newest_review" review pr-reviews "$REVIEWS_DIR" "$islive" \
+        "$newest_review" "-" "-" pr-reviews "${#review_dirs} tracked" "-" )
+    rows+=( "${(pj:\t:)f}" )
+  fi
+
+  (( ${#rows} )) || return 0
+
+  # Ages are filled in here rather than at each source, so notes dirs and
+  # worktrees are dated by the same clock. The leading sort key goes away
+  # with the cut.
+  local row
+  local -a filled
+  for row in "${rows[@]}"; do
+    f=( "${(@ps:\t:)row}" )
+    _resume_age "$f[6]"
+    f[7]=$REPLY
+    filled+=( "${(pj:\t:)f}" )
+  done
+  print -rl -- "${filled[@]}" | sort -t$'\t' -k1,1nr | cut -f2-
+}
+
 # One screen: live notes sessions, worktrees and what they came from, and
 # anything never distilled. Reviews have their own status command; this counts
 # them and points at it rather than re-running dozens of API calls.
+#
+#   wip            recency, topics, and what is undistilled
+#   wip --state    + dirty and merged, at a git status per worktree
 wip() {
   if [[ ! -x "$NOTES_BIN/notes-index" ]] || ! command -v jq &>/dev/null; then
     echo "wip: needs notes-index and jq"
     return 1
   fi
 
-  local index
-  index=$("$NOTES_BIN/notes-index" --json) || return 1
+  # --state costs a git status per worktree, which in the monorepo is seconds
+  # each. Off by default: the columns it fills are worth asking for, not worth
+  # waiting for every time.
+  local -a args
+  args=( --days 7 --topics )
+  [[ "$1" == "--state" || "$1" == "-s" ]] && args+=( --state )
 
-  local -a live
-  live=( ${(f)"$(tmux ls -F '#{session_name}' 2>/dev/null)"} )
-  local marker
+  local -a rows out
+  rows=( ${(f)"$(_resume_candidates "${args[@]}")"} )
 
   # In flight means: touched in the last week, or has a live tmux session.
   # Everything unwrapped regardless of age is a backlog, not a WIP list -- it
   # gets counted at the end instead of listed.
-  local -a rows
-  rows=( ${(f)"$(print -r -- "$index" | jq -r --arg live "${(j:,:)live}" '
-    ($live | split(",")) as $sessions
-    | .dirs[]
-    | select(.files > 0 or .transcripts > 0)
-    | select(.last_activity > (now - 86400 * 7)
-             or (("notes--" + .slug) | IN($sessions[])))
-    | [.slug,
-       (if .topic == "" then "-" else .topic end),
-       .age,
-       (if .wrapped then "" else "UNWRAPPED" end)]
-    | @tsv')"} )
-
   echo "notes"
-  if (( ! ${#rows} )); then
+  out=( ${(f)"$(print -rl -- "${rows[@]}" | awk -F'\t' -v OFS='\t' '
+    $1 == "notes" { print ($4 == "1" ? "⚡" : "  "), $8, $7, $6,
+                          ($9 == "-" ? "" : toupper($9)) }')"} )
+  if (( ! ${#out} )); then
     echo "  (nothing recent)"
   else
-    local row slug
-    for row in "${rows[@]}"; do
-      slug="${row%%	*}"
-      marker="  "
-      (( ${live[(I)notes--$slug]} )) && marker="⚡"
-      printf '%s\t%s\n' "$marker" "$row"
-    done | column -t -s $'\t'
+    print -rl -- "${out[@]}" | column -t -s $'\t'
   fi
-
-  local stale
-  stale=$(print -r -- "$index" | jq '[.dirs[]
-    | select(.wrapped == false and .last_activity <= (now - 86400 * 7))
-    | select(.files > 0 or .transcripts > 0)] | length')
-  (( stale > 0 )) && echo "  + ${stale} older, never distilled — notes-gc"
+  (( _resume_stale > 0 )) \
+    && echo "  + ${_resume_stale} older, never distilled — notes-gc"
   echo ""
 
   echo "worktrees"
-  local -a wt_lines
-  wt_lines=()
-  local -a repos
-  repos=()
-  [[ -n "$MONOREPO_DIR" && -d "$MONOREPO_DIR" ]] && repos+=( "${MONOREPO_DIR:A}" )
-  local d
-  for d in "$WORKTREES_DIR"/*(/N); do
-    git -C "$d" rev-parse --git-dir &>/dev/null && wt_lines+=( "$d" )
-  done
-  local r
-  for r in "${repos[@]}"; do
-    for d in "$r"/.worktrees/*(/N); do wt_lines+=( "$d" ); done
-  done
-
-  if (( ! ${#wt_lines} )); then
+  out=( ${(f)"$(print -rl -- "${rows[@]}" | awk -F'\t' -v OFS='\t' '
+    $1 == "wt" { print ($4 == "1" ? "⚡" : "  "), $7, $8, $10,
+                       ($9 == "-" ? "" : $9) }')"} )
+  if (( ! ${#out} )); then
     echo "  (none)"
   else
-    local -a out
-    out=()
-    # Declared once: zsh's `local` echoes the variable when it re-declares one
-    # that already exists in the same scope, which would print on every pass.
-    local br note state sess repo_of
-    for d in "${wt_lines[@]}"; do
-      br=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue
-      repo_of=$(basename "$(dirname "$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)")")
-      note="-"
-      [[ -f "$d/.notes-link" ]] && note="${$(<"$d/.notes-link"):t}"
-      state=""
-      if git -C "$d" merge-base --is-ancestor HEAD origin/HEAD 2>/dev/null; then
-        state="merged"
-      elif [[ -n "$(git -C "$d" status --porcelain 2>/dev/null)" ]]; then
-        state="dirty"
-      fi
-      sess="${repo_of}--${br//\//-}"
-      sess=${sess//./-}
-      marker="  "
-      (( ${live[(I)$sess]} )) && marker="⚡"
-      out+=( "${marker}	${repo_of}	${br}	${note}	${state}" )
-    done
-    printf '%s\n' "${out[@]}" | column -t -s $'\t'
+    print -rl -- "${out[@]}" | column -t -s $'\t'
   fi
   echo ""
 
@@ -1259,10 +1566,125 @@ wip() {
   echo "reviews: ${#review_dirs} tracked — run review-status for detail"
 }
 
+# --- Workflow: back from a restart ---
+
+# Reopen the tmux sessions a reboot took out
+#
+# Derived rather than restored: the candidates are the notes dirs, worktrees
+# and reviews that were actually active recently, so nothing has to be saved
+# on the way down, a crash loses nothing, and work you have since abandoned
+# never comes back. Sessions are created detached, at the right directory,
+# with nothing running in them -- what you want back is the context, and the
+# processes you left behind were mid-thought anyway.
+#
+# Session names match what notes, code and review-pr would have used, so a
+# reopened session is the same session as far as every other command here is
+# concerned. Anything already open is filtered out: safe to re-run any time.
+#
+# Usage:
+#   resume                  pick from what was active in the last 7 days
+#   resume --days 14        widen the window
+#   resume -n               print what it would create, create nothing
+#   resume -a               attach to the first session afterwards
+resume() {
+  local days=7 dry=0 attach=0
+  while (( $# )); do
+    case "$1" in
+      --days)
+        if [[ -z "$2" ]]; then echo "resume: --days requires a value"; return 1; fi
+        days="$2"; shift 2 ;;
+      -n|--dry-run) dry=1; shift ;;
+      -a|--attach)  attach=1; shift ;;
+      -h|--help)
+        echo "Usage: resume [--days N] [-n|--dry-run] [-a|--attach]"
+        return 0 ;;
+      *) echo "resume: unknown option: $1"; return 1 ;;
+    esac
+  done
+
+  if ! command -v fzf &>/dev/null; then
+    echo "resume: needs fzf"
+    return 1
+  fi
+
+  # Live sessions are already back. The merged check only bites when the rows
+  # carry state, which the fast path does not ask for: hiding finished
+  # worktrees is not worth a git status each. They age out of the window on
+  # their own, and worktree-cleanup.sh is what actually removes them.
+  local -a cands
+  cands=( ${(f)"$(_resume_candidates --days "$days" \
+    | awk -F'\t' -v cutoff=$(( EPOCHSECONDS - 86400 * days )) \
+        '$4 == "0" && $9 != "merged" && $5 + 0 >= cutoff')"} )
+
+  if (( ! ${#cands} )); then
+    echo "resume: nothing to reopen"
+    return 0
+  fi
+
+  # What tells these apart is the tail of the name, not the head:
+  # INCIDENT-24468-narrowing-panels and INCIDENT-24468-all-time-window-
+  # normalization differ in their last word. So the column is wide, and what
+  # does not fit is cut off the front.
+  local row kind sess cwd live ts age ctx name flags link detail line
+  local -a menu parts
+  for row in "${cands[@]}"; do
+    IFS=$'\t' read -r kind sess cwd live ts age ctx name flags link <<< "$row"
+    (( ${#name} > 50 )) && name="…${name[-49,-1]}"
+    parts=()
+    [[ "$ctx"   != "-" ]] && parts+=( "$ctx" )
+    [[ "$flags" != "-" ]] && parts+=( "$flags" )
+    [[ "$link"  != "-" ]] && parts+=( "notes: $link" )
+    detail="${(j: · :)parts}"
+    printf -v line '%-6s  %-50s  %4s  %s\t%s\t%s\t%s' \
+      "$kind" "$name" "$age" "$detail" "$kind" "$sess" "$cwd"
+    menu+=( "$line" )
+  done
+
+  local out
+  out=$(print -rl -- "${menu[@]}" \
+    | fzf --multi --height=~20 --reverse \
+          --delimiter=$'\t' --with-nth=1 \
+          --prompt='resume> ' \
+          --header='tab: mark · enter: open the sessions (nothing runs in them)' \
+          --preview="'$NOTES_BIN/resume-preview' {2} {4}" \
+          --preview-window='right,52%,wrap,border-left') || return 1
+  [[ -n "$out" ]] || return 1
+
+  local disp
+  local -a created
+  while IFS=$'\t' read -r disp kind sess cwd; do
+    [[ -n "$sess" && -d "$cwd" ]] || continue
+    if (( dry )); then
+      printf 'would open   %-40s %s\n' "$sess" "$cwd"
+      continue
+    fi
+    # =name so a session whose name prefixes another is not mistaken for it.
+    tmux has-session -t "=$sess" 2>/dev/null && continue
+    tmux new-session -d -s "$sess" -c "$cwd" || continue
+    created+=( "$sess" )
+  done <<< "$out"
+
+  (( ${#created} )) || return 0
+  echo ""
+  tls
+
+  if (( attach )); then
+    if [[ -n "$TMUX" ]]; then
+      tmux switch-client -t "=${created[1]}"
+    else
+      tmux attach-session -t "=${created[1]}"
+    fi
+  fi
+}
+
 # --- Tab completion ---
 
 _tmux_workflows_ws() { _path_files -W "$WORKSPACE" -/ }
-_tmux_workflows_wt() { _path_files -W "$WORKTREES_DIR" -/ }
+_tmux_workflows_wt() {
+  local root
+  root=$(_main_repo_root 2>/dev/null) || return
+  _path_files -W "${root}/${WORKTREES_SUBDIR}" -/
+}
 
 # Existing scratch dirs plus knowledge base topic slugs: typing a topic name
 # should reach it even when no dir is named that yet.
