@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# fzf preview for the resume(1) picker.
+#
+# Usage: resume-preview <kind> <dir>
+#   kind  notes | wt | review
+#   dir   the directory the session would be opened at
+#
+# The question this has to answer is "do I want this one back", which is not
+# the same as "what is this": a branch name is a label, the uncommitted diff
+# is the thing you were in the middle of.
+#
+# Deliberately shell-only, like notes-preview: fzf re-runs it on every
+# selection change, and python3 takes ~0.65s to start on a managed Mac.
+
+set -uo pipefail
+
+: "${REVIEWS_DIR:="$HOME/workspace/_notes/reviews"}"
+
+kind="${1:-}"
+dir="${2:-}"
+[ -n "$kind" ] && [ -n "$dir" ] || exit 0
+
+here="$(cd "$(dirname "$0")" && pwd)"
+
+case "$kind" in
+  notes)
+    # The notes picker already renders these well; no reason to differ.
+    exec "$here/notes-preview" "$(basename "$dir")"
+    ;;
+
+  wt)
+    echo "── $dir"
+    branch=$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    echo "branch:  ${branch:-?}"
+    [ -f "$dir/.notes-link" ] && echo "notes:   $(basename "$(cat "$dir/.notes-link")")"
+
+    ahead=$(git -C "$dir" rev-list --count origin/HEAD..HEAD 2>/dev/null)
+    [ -n "${ahead:-}" ] && [ "$ahead" != "0" ] && echo "ahead:   $ahead commit(s) not on origin/HEAD"
+    echo
+
+    echo "── uncommitted"
+    status=$(git -C "$dir" status --porcelain 2>/dev/null | head -15)
+    if [ -n "$status" ]; then
+      echo "$status"
+      git -C "$dir" diff --shortstat 2>/dev/null
+    else
+      echo "(clean)"
+    fi
+    echo
+
+    echo "── commits"
+    git -C "$dir" log --oneline -8 2>/dev/null
+    ;;
+
+  review)
+    echo "── $REVIEWS_DIR"
+    echo "One session, one window per review — review-pr opens them again."
+    echo
+    # Ordered by when each was last reviewed, which is not the same as the
+    # dir's mtime: re-reviewing a PR rewrites the metadata in place.
+    for d in "$REVIEWS_DIR"/*/; do
+      [ -d "$d" ] || continue
+      name=$(basename "$d")
+      when=""
+      meta="$d/.review-meta.json"
+      [ -f "$meta" ] && command -v jq >/dev/null 2>&1 \
+        && when=$(jq -r '.reviewed_at // ""' "$meta")
+      printf '%s\t%s\n' "${when:-0000}" "$name"
+    done | sort -r | head -12 | while IFS=$(printf '\t') read -r when name; do
+      printf '%-28s %s\n' "$name" "${when%%T*}"
+    done
+    ;;
+esac
