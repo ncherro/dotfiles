@@ -859,8 +859,8 @@ review-gc() {
 _notes_slug() {
   local s="${(L)*}"
   s="${s//[^a-z0-9._-]/-}"
-  # Collapse separator runs and trim the ends: "distro api / episode status"
-  # should slug to distro-api-episode-status, not distro-api--episode-status.
+  # Collapse separator runs and trim the ends: "admin api / user status"
+  # should slug to admin-api-user-status, not admin-api--user-status.
   while [[ "$s" == *--* ]]; do s="${s//--/-}"; done
   s="${s#-}"
   print -r -- "${s%-}"
