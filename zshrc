@@ -16,3 +16,10 @@ source $DOTFILES/zsh/tmux-workflows.zsh
 
 export PATH="$HOME/.local/bin:$PATH"
 export PATH=/opt/spotify-devex/bin:$PATH
+
+# A restart takes every tmux session with it, and the shell that comes back
+# gives no sign that anything is missing. One tmux call, only in shells
+# started outside tmux, and only while there is nothing to attach to.
+if [[ -o interactive && -z "$TMUX" ]] && ! tmux ls &>/dev/null; then
+  echo "no tmux sessions — 'resume' reopens what you were working on"
+fi
