@@ -447,6 +447,54 @@ _review_infer_from_dirname() {
   _rv_owner="$REVIEW_DEFAULT_OWNER"
 }
 
+# The reviews session, with the status of every tracked review already in it
+#
+# `review <url>` adds a review to the session; `review` on its own gets you
+# back to the session, which a reboot or a stray kill-session takes with it.
+# Window 0 runs review-status, so you land on the list rather than an empty
+# shell. `resume` can recreate this session too, but deliberately starts
+# everything empty -- that is the difference between the two.
+_review_session() {
+  local session="pr-reviews" target cmd
+  local -a wins
+
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$REVIEWS_DIR" -n status
+    target="${session}:status"
+  elif tmux list-windows -t "=$session" -F '#{window_name}' | grep -qxF status; then
+    target="${session}:status"
+  else
+    # A session that resume recreated holds one idle shell. Make that the
+    # status window rather than leaving a stray one beside it.
+    wins=( ${(f)"$(tmux list-windows -t "=$session" -F '#{window_index} #{pane_current_command}')"} )
+    if (( ${#wins} == 1 )) && [[ "${wins[1]#* }" == (zsh|bash|sh) ]]; then
+      target="${session}:${wins[1]%% *}"
+      tmux rename-window -t "$target" status
+    else
+      tmux new-window -t "$session" -n status -c "$REVIEWS_DIR"
+      target="${session}:status"
+    fi
+  fi
+
+  # automatic-rename is on globally, which would rename this back to `zsh` the
+  # moment review-status finishes -- and then the check above would miss it and
+  # add another window on every call.
+  tmux set-window-option -t "$target" automatic-rename off >/dev/null
+
+  # Refresh on the way in, but only into an idle shell: typing into a pane that
+  # is running something is how you end up in someone else's prompt.
+  cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}')
+  case "$cmd" in
+    zsh|bash|sh) tmux send-keys -t "$target" "review-status" Enter ;;
+  esac
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "=$session"
+  else
+    tmux attach-session -t "=$session"
+  fi
+}
+
 # Review a PR in a dedicated tmux session with Claude Code
 #
 # The bare name is the primary action, matching `notes`; review-status and
@@ -455,8 +503,8 @@ _review_infer_from_dirname() {
 review() {
   local url="$1"
   if [[ -z "$url" ]]; then
-    echo "Usage: review <PR-URL>"
-    return 1
+    _review_session
+    return
   fi
 
   local _rv_owner _rv_repo _rv_number
