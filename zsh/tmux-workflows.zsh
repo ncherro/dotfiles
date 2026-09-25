@@ -569,7 +569,7 @@ EOF
   fi
 
   tmux send-keys -t "${session}:${window}" \
-    "claude --dangerously-skip-permissions --model claude-opus-5 '/review-pr $url'" Enter
+    "claude --dangerously-skip-permissions '/review-pr $url'" Enter
 
   if [[ -n "$TMUX" ]]; then
     tmux switch-client -t "${session}:${window}"
