@@ -16,8 +16,12 @@ vimrc
 kitty.conf
 gitconfig
 gitignore_global       # symlinked to ~/.gitignore (core.excludesfile)
-claude/settings.json   # symlinked to ~/.claude/settings.json
 ```
+
+Claude Code settings are **not** in this repo. `~/.claude/settings.json` is
+symlinked to `~/workspace/dotfiles/claude/settings.json` — a separate work
+dotfiles repo on GHE. Model pins (`model`, `availableModels`,
+`ANTHROPIC_DEFAULT_*` under `env`) live there, not here.
 
 `~/.zshrc.local` is sourced automatically but never committed — use it for machine-local or sensitive config.
 
@@ -42,8 +46,6 @@ ln -s ~/Projects/dotfiles/vimrc ~/.vimrc
 ln -s ~/Projects/dotfiles/gitignore_global ~/.gitignore
 mkdir -p ~/.config/kitty
 ln -s ~/Projects/dotfiles/kitty.conf ~/.config/kitty/kitty.conf
-mkdir -p ~/.claude
-ln -s ~/Projects/dotfiles/claude/settings.json ~/.claude/settings.json
 ```
 
 ### Zsh plugins
