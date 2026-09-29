@@ -1369,8 +1369,10 @@ code() {
   tmpfile=$(mktemp -t "code-prompt-XXXXXX") || return 1
   {
     print -r -- "This coding session comes out of an investigation. Its notes are in"
-    print -r -- "${notes_dir} (available to you via --add-dir). Read what is"
-    print -r -- "relevant there before starting — do not re-derive it."
+    print -r -- "${notes_dir} (available to you via --add-dir). Start with"
+    print -r -- "${notes_dir}/HANDOFF.md if it exists; open other files there only"
+    print -r -- "when it points you to them or the task needs detail — do not"
+    print -r -- "explore the whole dir, and do not re-derive what it concludes."
     print -r -- ""
     print -r -- "Task:"
     print -r -- "$prompt_text"
