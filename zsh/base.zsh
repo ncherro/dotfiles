@@ -75,7 +75,13 @@ alias dc="docker compose"
 alias dcps='docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"'
 alias dcps-all="docker compose ps"
  
-alias c="claude --model claude-opus-5-5 --effort medium"
+c() {
+  if [[ ${AGENT_CMD:-claude} == snipe ]]; then
+    snipe --model claude-opus-5-5 --thinking medium "$@"
+  else
+    claude --model claude-opus-5-5 --effort medium "$@"
+  fi
+}
 
 ulimit -n 10000
 export CLICOLOR=1
