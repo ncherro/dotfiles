@@ -4,7 +4,7 @@
 # Source this file from your .zshrc:
 #   source /path/to/tmux-workflows.zsh
 #
-# Prerequisites: tmux, git, gh (GitHub CLI), claude (for review)
+# Prerequisites: tmux, git, gh (GitHub CLI), claude or snipe (see AGENT_CMD)
 #   jq        session/review metadata
 #   fzf       the notes and resume pickers
 #   python3   bin/notes-index, which joins the notes dirs to the knowledge base
@@ -62,6 +62,11 @@
 # gitignore (see gitignore_global) so the repo never reads as dirty.
 : ${WORKTREES_SUBDIR:=".worktrees"}
 
+# Coding agent that gwt, code and review launch: claude or snipe. Read at call
+# time, so `export AGENT_CMD=snipe` in a shell, or `AGENT_CMD=snipe review …`
+# for one run, switches without re-sourcing.
+: ${AGENT_CMD:="claude"}
+
 # --- Dependency check ---
 for _twf_cmd in tmux git gh jq fzf rg; do
   if ! command -v "$_twf_cmd" &>/dev/null; then
@@ -76,6 +81,19 @@ zmodload -F zsh/stat b:zstat 2>/dev/null
 zmodload -F zsh/datetime p:EPOCHSECONDS 2>/dev/null
 
 # --- Helpers ---
+
+# _agent_cmd <mode> [model] — the $AGENT_CMD invocation for a permission mode
+# (bypass | safer | anything else for the default), into REPLY.
+_agent_cmd() {
+  local mode=$1 model=$2
+  REPLY=$AGENT_CMD
+  case "$AGENT_CMD:$mode" in
+    snipe:bypass) REPLY+=" --yolo" ;;
+    *:bypass)     REPLY+=" --dangerously-skip-permissions" ;;
+    *:safer)      REPLY+=" --permission-mode acceptEdits" ;;
+  esac
+  [[ -n "$model" ]] && REPLY+=" --model $model"
+}
 
 _git_default_branch() {
   local b
@@ -376,14 +394,8 @@ gwt() {
   tmpfile=$(mktemp -t "gwt-prompt-XXXXXX") || return 1
   print -r -- "$prompt_text" > "$tmpfile"
 
-  local claude_flags=""
-  case "$mode" in
-    bypass) claude_flags+=" --dangerously-skip-permissions" ;;
-    safer)  claude_flags+=" --permission-mode acceptEdits" ;;
-  esac
-  [[ -n "$model" ]] && claude_flags+=" --model $model"
-
-  tmux send-keys -t "$session_name" "claude${claude_flags} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
+  _agent_cmd "$mode" "$model"
+  tmux send-keys -t "$session_name" "${REPLY} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
 
   # Return user to their original cwd; don't attach.
   cd "$original_pwd"
@@ -568,8 +580,8 @@ EOF
     tmux set-window-option -t "${session}:${window}" automatic-rename off >/dev/null
   fi
 
-  tmux send-keys -t "${session}:${window}" \
-    "claude --dangerously-skip-permissions '/review-pr $url'" Enter
+  _agent_cmd bypass
+  tmux send-keys -t "${session}:${window}" "${REPLY} '/review-pr $url'" Enter
 
   if [[ -n "$TMUX" ]]; then
     tmux switch-client -t "${session}:${window}"
@@ -1378,15 +1390,9 @@ code() {
     print -r -- "$prompt_text"
   } > "$tmpfile"
 
-  local claude_flags="--add-dir ${(q)notes_dir}"
-  case "$mode" in
-    bypass) claude_flags+=" --dangerously-skip-permissions" ;;
-    safer)  claude_flags+=" --permission-mode acceptEdits" ;;
-  esac
-  [[ -n "$model" ]] && claude_flags+=" --model $model"
-
+  _agent_cmd "$mode" "$model"
   tmux send-keys -t "$session_name" \
-    "claude ${claude_flags} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
+    "${REPLY} --add-dir ${(q)notes_dir} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
 
   echo "Worktree: $dest"
   echo "Notes:    $notes_dir  (linked via --add-dir)"
