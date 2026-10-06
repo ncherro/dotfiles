@@ -1391,7 +1391,7 @@ _notes_close_window() {
 #   code <branch> -p "<task>" --yolo       + skip all permission prompts
 #   code <branch> -c <component> ...       monorepo: sparse-checkout components
 #   code <branch> --repo <name>            repo under $WORKSPACE (default: monorepo)
-#   code <branch> --notes <slug>           run from anywhere
+#   code <branch> --notes <topic>/<slug>   run from anywhere
 code() {
   local branch="" prompt="" mode="" model="" repo="" notes_slug=""
   local -a components
@@ -1435,7 +1435,7 @@ code() {
   # without them, in which case every path below silently evaluates to "" and
   # the session gets built in the wrong place while still reporting success.
   local _fn
-  for _fn in _worktree_path _notes_session_init _notes_current_slug; do
+  for _fn in _worktree_path _notes_session_init _notes_current_slug _notes_is_topic_dir; do
     if (( ! $+functions[$_fn] )); then
       echo "code: required helper '$_fn' is not defined."
       echo "      source ${DOTFILES:-$HOME/Projects/dotfiles}/zsh/tmux-workflows.zsh first."
@@ -1457,6 +1457,13 @@ code() {
   local notes_dir="${NOTES_DIR}/${notes_slug}"
   if [[ ! -d "$notes_dir" ]]; then
     echo "code: no such notes dir: $notes_dir"
+    return 1
+  fi
+  # A topic dir's root is many investigations, not one: linking a worktree to
+  # it would leave /wrap no way to tell which one the work came out of.
+  if [[ "$notes_slug" != */* ]] && _notes_is_topic_dir "$notes_slug"; then
+    echo "code: ${notes_slug} is a topic dir, not an investigation."
+    echo "      run it from <topic>/<slug>, or pass --notes ${notes_slug}/<slug>"
     return 1
   fi
 

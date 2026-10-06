@@ -15,6 +15,12 @@
 # thirds of every line is the same text repeated. Tag the kind, strip the
 # prefix, and spend the width on what differs.
 #
+# Sessions are grouped by knowledge base topic: an investigation's notes
+# session first, then the coding sessions `code` started from it, found
+# through the worktree's .notes-link. Groups sort by their newest activity.
+# Names are left alone -- tat, gwt, code and resume all derive a worktree's
+# session name from repo and branch, and must keep agreeing on it.
+#
 # The patterns are derived rather than written down: the repo is whatever
 # precedes the first "--" (every name is built that way by
 # _tmux_session_name), and the branch prefix is your own username. Nothing
@@ -25,6 +31,45 @@ set -uo pipefail
 
 ME=$(id -un)
 NAME_WIDTH=44
+TOPIC_WIDTH=24
+NOTES_DIR="${NOTES_DIR:-$HOME/workspace/_notes}"
+NOTES_KB="${NOTES_KB:-$HOME/workspace/notes-kb}"
+NOTES_INBOX="${NOTES_INBOX:-inbox}"
+
+# A field of a .session.json, without paying for jq on every popup.
+session_field() {
+  [ -f "$1/.session.json" ] || return 0
+  sed -n 's/^ *"'"$2"'": *"\([^"]*\)".*/\1/p' "$1/.session.json" | head -1
+}
+
+# The topic a notes dir belongs to: the topic dir it is (or is in), else what
+# where /wrap said it should go, else what its metadata says.
+topic_of_notes_dir() {
+  local dir="$1" rel top t
+  rel="${dir#"$NOTES_DIR"/}"
+  [ "$rel" = "$dir" ] && return 0
+  top="${rel%%/*}"
+  if [ "$top" != "$NOTES_INBOX" ] && { [ -f "$NOTES_KB/topics/$top.md" ] \
+       || [ "$(session_field "$NOTES_DIR/$top" kind)" = topic ]; }; then
+    printf '%s' "$top"; return
+  fi
+  # A move /wrap recorded is where it is headed, so it wins.
+  t=$(session_field "$dir" move_to)
+  [ -n "$t" ] || t=$(session_field "$dir" topic)
+  printf '%s' "$t"
+}
+
+topic_of_session() {
+  local sess="$1" path="$2" link
+  case "$sess" in
+    notes--*) topic_of_notes_dir "$NOTES_DIR/${sess#notes--}" ;;
+    pr-*)     ;;
+    *)
+      link="$path/.notes-link"
+      [ -f "$link" ] && topic_of_notes_dir "$(head -1 "$link")"
+      ;;
+  esac
+}
 
 # <repo>--<branch> -> <branch>, then drop your own branch prefix. Parameter
 # expansion rather than a regex: the repo name contains dashes itself, so
@@ -36,10 +81,26 @@ shorten() {
 }
 
 rows() {
-  local ts att wins when sess tag short procs
-  tmux ls -F '#{session_activity}	#{?session_attached,*, }	#{session_windows}	#{t/p:session_activity}	#{session_name}' 2>/dev/null \
-    | sort -t'	' -k1,1nr \
-    | while IFS=$'\t' read -r ts att wins when sess; do
+  local ts att wins when sess path tag short procs topic rank
+  # Pass 1: one line per session with its topic, keyed for grouping.
+  tmux ls -F '#{session_activity}	#{?session_attached,*,-}	#{session_windows}	#{t/p:session_activity}	#{session_name}	#{session_path}' 2>/dev/null \
+    | while IFS=$'\t' read -r ts att wins when sess path; do
+        topic=$(topic_of_session "$sess" "$path")
+        # The notes session leads its group; a session with no topic is a
+        # group of one, keyed by its own name.
+        case "$sess" in notes--*) rank=0 ;; *) rank=1 ;; esac
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+          "${topic:-=$sess}" "$rank" "$ts" "$att" "$wins" "$when" "$sess" "$topic"
+      done \
+    | awk -F'\t' '
+        # Each group sorts by its newest member, then members by rank and age.
+        { line[NR] = $0; if ($3 > newest[$1]) newest[$1] = $3 }
+        END { for (i = 1; i <= NR; i++) {
+                split(line[i], f, "\t"); print newest[f[1]] "\t" line[i] } }' \
+    | sort -t$'\t' -k1,1nr -k2,2 -k3,3n -k4,4nr \
+    | cut -f4- \
+    | while IFS=$'\t' read -r ts att wins when sess topic; do
+        [ "$att" = "-" ] && att=" "
         case "$sess" in
           notes--*)    tag=notes ;;
           pr-*)        tag=pr    ;;
@@ -48,9 +109,11 @@ rows() {
         short=$(shorten "$sess")
         procs=$(tmux list-windows -t "=$sess" -F '#{pane_current_command}' 2>/dev/null \
           | grep -vE '^(zsh|bash|sh|login)$' | sort -u | tr '\n' ' ')
+        [ ${#topic} -gt $TOPIC_WIDTH ] && topic="${topic:0:$((TOPIC_WIDTH - 1))}…"
         # Display, then the real name hidden behind a tab for the picker.
-        printf '%s %-5s %-*s %2sw  %-5s  %s\t%s\n' \
-          "$att" "$tag" "$NAME_WIDTH" "$short" "$wins" "$when" "$procs" "$sess"
+        printf '%s %-5s %-*s %-*s %2sw  %-5s  %s\t%s\n' \
+          "$att" "$tag" "$TOPIC_WIDTH" "${topic:--}" "$NAME_WIDTH" "$short" \
+          "$wins" "$when" "$procs" "$sess"
       done
 }
 
