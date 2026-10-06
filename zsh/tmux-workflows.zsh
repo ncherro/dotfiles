@@ -1070,6 +1070,21 @@ _notes_resolve() {
 # automatic-rename is on, and tmux reads a dot in a `-t` target as a pane
 # separator.
 _notes_open() {
+  _notes_ensure_window "$1" || return 1
+  local session="${REPLY%%:*}"
+  tmux select-window -t "=${REPLY}"
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "=${session}"
+  else
+    tmux attach-session -t "=${session}"
+  fi
+}
+
+# Create (or find) the session and window for a notes dir without switching
+# to it, setting REPLY to `<session>:<window index>`. Shared by notes(1) and
+# resume(1), so a reopened investigation is the same window either way.
+_notes_ensure_window() {
   local rel="$1"
   local dir="${NOTES_DIR}/${rel}"
   local top="${rel%%/*}" win="${rel##*/}"
@@ -1091,13 +1106,7 @@ _notes_open() {
     fi
   fi
   tmux set-option -w -t "=${session}:${idx}" @notes "$rel" 2>/dev/null
-  tmux select-window -t "=${session}:${idx}"
-
-  if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t "=${session}"
-  else
-    tmux attach-session -t "=${session}"
-  fi
+  REPLY="${session}:${idx}"
 }
 
 # Open an investigation in its topic's tmux session
@@ -1762,11 +1771,33 @@ _resume_candidates() {
     fi
   fi
 
-  local d slug sess islive ts ctx flags
+  # Notes windows already open, by the rel path notes(1) tagged them with.
+  local -a open_windows
+  open_windows=( ${(f)"$(tmux list-windows -a -F '#{@notes}' 2>/dev/null)"} )
+
+  # Every notes dir to consider, as rel paths: a topic dir contributes its
+  # root and each investigation in it, anything else just itself.
+  local top sub
+  local -a notes_rels subs absorbed_subs
   for d in "$NOTES_DIR"/*(/N); do
-    slug="${d:t}"
+    top="${d:t}"
     # The reviews dir lives under NOTES_DIR but is not an investigation.
     [[ "${d:A}" == "${REVIEWS_DIR:A}" ]] && continue
+    notes_rels+=( "$top" )
+    _notes_is_topic_dir "$top" || continue
+    absorbed_subs=()
+    [[ -f "$d/.session.json" ]] && absorbed_subs=( ${(f)"$(jq -r \
+      '(.absorbed // [])[] | (.subdir // .slug)' "$d/.session.json" 2>/dev/null)"} )
+    for sub in "$d"/*(/N:t); do
+      if [[ -f "$d/$sub/.session.json" ]] || (( ${absorbed_subs[(Ie)$sub]} )); then
+        notes_rels+=( "${top}/${sub}" )
+      fi
+    done
+  done
+
+  local d slug sess islive ts ctx flags
+  for slug in "${notes_rels[@]}"; do
+    d="${NOTES_DIR}/${slug}"
 
     ts=0
     zstat -A st +mtime "$d" 2>/dev/null && ts=$st[1]
@@ -1781,8 +1812,13 @@ _resume_candidates() {
     # them eagerly, so most of them are a name and nothing else.
     (( ${#newest} )) || [[ $REPLY -gt 0 ]] || continue
 
-    sess="notes--${slug}"
-    islive=0; (( ${live[(I)$sess]} )) && islive=1
+    sess="notes--${slug%%/*}"
+    islive=0
+    if [[ "$slug" == */* ]]; then
+      (( ${open_windows[(Ie)$slug]} )) && islive=1
+    else
+      (( ${live[(I)$sess]} )) && islive=1
+    fi
     (( ts > cutoff )) || (( islive )) || continue
 
     ctx="${topic_of[$slug]:--}"; [[ -n "$ctx" ]] || ctx="-"
@@ -2020,6 +2056,12 @@ resume() {
     [[ -n "$sess" && -d "$cwd" ]] || continue
     if (( dry )); then
       printf 'would open   %-40s %s\n' "$sess" "$cwd"
+      continue
+    fi
+    if [[ "$kind" == notes ]]; then
+      # Back into its topic's session, as the window notes(1) would use.
+      _notes_ensure_window "${cwd#$NOTES_DIR/}" || continue
+      (( ${created[(Ie)$sess]} )) || created+=( "$sess" )
       continue
     fi
     # =name so a session whose name prefixes another is not mistaken for it.
