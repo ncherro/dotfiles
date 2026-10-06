@@ -3,9 +3,9 @@
 #
 # Usage: notes-preview <value>
 #   <value> is the third field of a notes-index --fzf row:
-#     <slug>          an existing scratch dir
+#     <rel>           an existing dir: <topic>/<slug>, <topic>, or <slug>
 #     +topic:<slug>   a knowledge base topic
-#     +create:<slug>  a dir that does not exist yet
+#     +create:<slug>  a new investigation in the inbox
 #
 # Deliberately shell-only. fzf re-runs this on every selection change, and
 # python3 takes ~0.65s to start on a managed Mac.
@@ -39,10 +39,10 @@ case "$value" in
     ;;
   +create:*)
     slug="${value#+create:}"
-    echo "new scratch dir: $NOTES_DIR/$slug"
+    echo "new investigation: $NOTES_DIR/${NOTES_INBOX:-inbox}/$slug"
     echo
-    echo "No knowledge base topic attached. /wrap will route it at the end,"
-    echo "or pick a [topic] row instead to attach it now."
+    echo "No knowledge base topic yet. /wrap will route it at the end,"
+    echo "or pick a [topic] row instead to start it in that topic."
     ;;
   *)
     dir="$NOTES_DIR/$value"
@@ -64,7 +64,7 @@ case "$value" in
     fi
     # A session whose only artifact is the transcript looks empty on disk but
     # is not: it is a /wrap --recover candidate.
-    proj="$HOME/.claude/projects/-$(echo "${NOTES_DIR#/}" | tr '/_.' '-')-$value"
+    proj="$HOME/.claude/projects/-$(echo "${NOTES_DIR#/}/$value" | tr '/_.' '-')"
     if [ -d "$proj" ]; then
       n=$(find "$proj" -name '*.jsonl' | wc -l | tr -d ' ')
       kb=$(du -sk "$proj" 2>/dev/null | cut -f1)

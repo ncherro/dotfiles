@@ -46,6 +46,10 @@ PROJECTS_DIR = HOME / ".claude/projects"
 # Scratch dirs that are not investigations.
 SKIP_DIRS = {"reviews"}
 
+# Top-level dir for investigations with no knowledge base topic yet. Laid out
+# like a topic dir; /wrap moves each one out once it knows where it belongs.
+INBOX = "inbox"
+
 PRUNE = {"node_modules", ".git", ".venv", "__pycache__", "target", "dist"}
 MAX_DEPTH = 2
 
@@ -56,37 +60,33 @@ STOPWORDS = {
 }
 
 
-def transcript_dir_for(slug):
-    """The Claude Code project dir that holds this scratch dir's transcripts.
+def transcript_dir_for(rel):
+    """The Claude Code project dir that holds a scratch dir's transcripts.
 
-    Its name is derived from the path, so it does NOT follow a dir that gets
+    `rel` is the path under NOTES_DIR: `<slug>` for a top-level dir,
+    `<topic>/<slug>` for an investigation inside a topic dir. Claude Code
+    encodes a project path by replacing /, _ and . with '-'.
+
+    The name is derived from the path, so it does NOT follow a dir that gets
     moved or merged. That is why a merge has to record it as provenance --
     see notes-merge(1)."""
-    encoded = re.sub(r"[/_.]", "-", str(NOTES_DIR / slug).lstrip("/"))
+    encoded = re.sub(r"[/_.]", "-", str(NOTES_DIR / rel).lstrip("/"))
     return "-" + encoded
 
 
-def slug_from_transcript_dir(name):
-    """`-Users-nicholash-workspace--notes-mp-in-udl` -> `mp-in-udl`."""
-    # Claude Code encodes a project path by replacing /, _ and . with '-'.
-    encoded = re.sub(r"[/_.]", "-", str(NOTES_DIR).lstrip("/"))
-    prefix = "-" + encoded + "-"
-    if name.startswith(prefix):
-        return name[len(prefix):]
-    return None
-
-
 def transcript_stats():
-    """slug -> (jsonl count, total KB, newest mtime). Sessions whose only
-    artifact is the transcript still count as activity."""
+    """project dir name -> (jsonl count, total KB, newest mtime). Sessions
+    whose only artifact is the transcript still count as activity.
+
+    Keyed by the encoded dir name rather than decoded back to a slug: once
+    dirs nest, `topic-slug` cannot be split back into `topic/slug`, so callers
+    look up the name they expect with transcript_dir_for()."""
     out = {}
     if not PROJECTS_DIR.is_dir():
         return out
+    prefix = transcript_dir_for("")
     for entry in os.scandir(PROJECTS_DIR):
-        if not entry.is_dir():
-            continue
-        slug = slug_from_transcript_dir(entry.name)
-        if not slug:
+        if not entry.is_dir() or not entry.name.startswith(prefix):
             continue
         count = 0
         total = 0
@@ -99,13 +99,15 @@ def transcript_stats():
             total += st.st_size
             newest = max(newest, st.st_mtime)
         if count:
-            out[slug] = (count, total // 1024, newest)
+            out[entry.name] = (count, total // 1024, newest)
     return out
 
 
-def walk_dir(path):
+def walk_dir(path, max_depth=MAX_DEPTH):
     """(file count, md count, newest mtime) under path, pruned and depth-capped.
-    `_notes/` holds vendored node_modules; a naive walk is unusably slow."""
+    `_notes/` holds vendored node_modules; a naive walk is unusably slow.
+    max_depth=0 counts only the files directly in path -- what a topic dir's
+    root holds, as opposed to its investigations."""
     files = mds = 0
     newest = 0.0
     stack = [(path, 0)]
@@ -117,10 +119,10 @@ def walk_dir(path):
             continue
         for e in entries:
             if e.is_dir(follow_symlinks=False):
-                if e.name not in PRUNE and depth < MAX_DEPTH:
+                if e.name not in PRUNE and depth < max_depth:
                     stack.append((e.path, depth + 1))
                 continue
-            if e.name == ".DS_Store":
+            if e.name in (".DS_Store", ".session.json"):
                 continue
             try:
                 st = e.stat()
@@ -168,12 +170,21 @@ def parse_scratch(text):
             block.append(cont)
         break
 
+    text = " ".join(block)
     scratch = []
-    for m in re.finditer(r"_notes/([A-Za-z0-9._-]+)", " ".join(block)):
-        d = m.group(1).rstrip(".")
-        if d not in scratch and d not in SKIP_DIRS:
+    # `_notes/<topic>/<slug>/` is one investigation; a path that runs on past
+    # that (`.../docs/file.md`) still points at the investigation it is in.
+    for m in re.finditer(r"_notes/([A-Za-z0-9._-]+)(?:/([A-Za-z0-9._-]+)/)?", text):
+        top = m.group(1).rstrip(".")
+        if top in SKIP_DIRS:
+            continue
+        d = "{}/{}".format(top, m.group(2)) if m.group(2) else top
+        if d not in scratch:
             scratch.append(d)
-    return scratch
+    # Since the reorg a topic's own investigations are listed by name only:
+    # **Scratch:** `~/workspace/_notes/<topic>/` — subdirs `a/`, `b/`
+    subdirs = [s for s in re.findall(r"`([A-Za-z0-9._-]+)/`", text)]
+    return scratch, subdirs
 
 
 def read_kb():
@@ -206,7 +217,7 @@ def read_kb():
                 elif line.startswith("updated:"):
                     updated = line.split(":", 1)[1].strip()
 
-            scratch = parse_scratch(text)
+            scratch, subdirs = parse_scratch(text)
 
             # Fall back to the first prose line when the index has no hook.
             hook = hooks.get(slug, "")
@@ -221,13 +232,15 @@ def read_kb():
                 "aliases": aliases,
                 "tags": tags,
                 "scratch": scratch,
+                "subdirs": subdirs,
                 "updated": updated,
             }
 
     # A topic can be listed in index.md before its file exists.
     for slug, hook in hooks.items():
         topics.setdefault(slug, {
-            "hook": hook, "aliases": [], "tags": [], "scratch": [], "updated": "",
+            "hook": hook, "aliases": [], "tags": [], "scratch": [],
+            "subdirs": [], "updated": "",
         })
 
     return topics
@@ -294,6 +307,86 @@ def build():
         for d in topics[slug]["scratch"]:
             dir_topic.setdefault(d, []).append(slug)
 
+    def row(rel, path, kind, parent="", absorbed_as=None, listed=False):
+        """One index row. `rel` is the path under NOTES_DIR and doubles as the
+        row's slug, so `_notes/<slug>` stays a valid path for every caller.
+
+        kind: topic         a topic dir's root (`<topic>/`)
+              investigation  a dir inside a topic dir (`<topic>/<slug>/`)
+              dir            a top-level dir not (yet) under a topic"""
+        session = read_session(path)
+        files, mds, newest = walk_dir(path, 0 if kind == "topic" else MAX_DEPTH)
+
+        # Its own transcripts, plus those it was absorbed from: a transcript
+        # stays named after the path it was opened at, so a moved dir's
+        # history lives under its old name.
+        tdirs = [transcript_dir_for(rel)]
+        tdirs += [a.get("transcript_dir") for a in [absorbed_as] if a]
+        tc = tkb = 0
+        tmtime = 0.0
+        for name in tdirs:
+            c, k, m = transcripts.get(name or "", (0, 0, 0.0))
+            tc, tkb, tmtime = tc + c, tkb + k, max(tmtime, m)
+        last = max(newest, tmtime, path.stat().st_mtime)
+
+        kb_topics = dir_topic.get(rel, [])
+        # Topics that actually point here -- a Scratch path, or a topic dir's
+        # Scratch line naming this subdir. Unlike `topics`, which a nested dir
+        # inherits from the topic dir it sits in, this is what notes-gc must
+        # check before deleting anything.
+        kb_refs = list(kb_topics)
+        if parent and path.name in topics.get(parent, {}).get("subdirs", []) \
+                and parent not in kb_refs and kind == "investigation":
+            kb_refs.append(parent)
+        # Freshest topic first, so the primary slot is the one still active.
+        topic_list = sorted(
+            kb_topics, key=lambda t: topics[t].get("updated", ""), reverse=True
+        )
+        # The topic dir a dir lives in is the strongest signal, then what
+        # .session.json declared at routing time, then the KB's pointers.
+        for t in [session.get("topic"), parent if parent in topics else ""]:
+            if t:
+                topic_list = [t] + [x for x in topic_list if x != t]
+
+        # A dir the KB points at has been distilled, even with no metadata.
+        # An investigation's own .session.json is trusted when it has one.
+        # One moved in without metadata predates .session.json and was
+        # distilled before it moved -- unless it holds no files, in which case
+        # its transcript is all there is and nothing was ever written up.
+        wrapped_at = session.get("wrapped_at") or ""
+        if "wrapped_at" in session:
+            wrapped = bool(wrapped_at) or bool(kb_topics)
+        else:
+            wrapped = bool(kb_topics) or ((bool(absorbed_as) or listed) and files > 0)
+
+        dirs.append({
+            "slug": rel,
+            "name": path.name,
+            "kind": kind,
+            "parent": parent,
+            "path": str(path),
+            "topic": topic_list[0] if topic_list else "",
+            "topics": topic_list,
+            "kb_refs": kb_refs,
+            "question": session.get("question", ""),
+            "wrapped": wrapped,
+            "wrapped_at": wrapped_at,
+            "worktrees": session.get("worktrees", []),
+            "has_session_json": bool(session),
+            "files": files,
+            "md": mds,
+            "transcripts": tc,
+            "transcript_kb": tkb,
+            "transcript_dir": transcript_dir_for(rel),
+            # Slugs merged into this dir. Their transcripts keep their old
+            # names forever, so this is the only way back to them.
+            "absorbed": session.get("absorbed", []),
+            "absorbed_as": (absorbed_as or {}).get("slug", ""),
+            "last_activity": int(last),
+            "age": age_label(last, now),
+            "empty": files == 0,
+        })
+
     dirs = []
     seen_dirs = set()
     if NOTES_DIR.is_dir():
@@ -303,49 +396,41 @@ def build():
             if entry.name in SKIP_DIRS:
                 continue
             slug = entry.name
-            seen_dirs.add(slug)
             path = Path(entry.path)
-            session = read_session(path)
-            files, mds, newest = walk_dir(path)
-            tc, tkb, tmtime = transcripts.get(slug, (0, 0, 0.0))
-            last = max(newest, tmtime, entry.stat().st_mtime)
+            seen_dirs.add(slug)
 
-            kb_topics = dir_topic.get(slug, [])
-            # Freshest topic first, so the primary slot is the one still active.
-            topic_list = sorted(
-                kb_topics, key=lambda t: topics[t].get("updated", ""), reverse=True
-            )
-            declared = session.get("topic")
-            if declared:
-                # .session.json wins the primary slot; it is set at routing time.
-                topic_list = [declared] + [t for t in topic_list if t != declared]
+            # A topic dir is a KB topic, the inbox, or a dir notes(1) or
+            # notes-merge(1) marked as one -- a new topic can have a dir
+            # before it has a KB file.
+            root_session = read_session(path)
+            is_topic = (slug in topics or slug == INBOX
+                        or root_session.get("kind") == "topic"
+                        or (root_session.get("absorbed")
+                            and root_session.get("topic") == slug))
+            if not is_topic:
+                row(slug, path, "dir")
+                continue
 
-            # A dir the KB points at has been distilled, even with no metadata.
-            wrapped_at = session.get("wrapped_at") or ""
-            wrapped = bool(wrapped_at) or bool(kb_topics)
-
-            dirs.append({
-                "slug": slug,
-                "path": str(path),
-                "topic": topic_list[0] if topic_list else "",
-                "topics": topic_list,
-                "question": session.get("question", ""),
-                "wrapped": wrapped,
-                "wrapped_at": wrapped_at,
-                "worktrees": session.get("worktrees", []),
-                "has_session_json": bool(session),
-                "files": files,
-                "md": mds,
-                "transcripts": tc,
-                "transcript_kb": tkb,
-                "transcript_dir": transcript_dir_for(slug),
-                # Slugs merged into this dir. Their transcripts keep their old
-                # names forever, so this is the only way back to them.
-                "absorbed": session.get("absorbed", []),
-                "last_activity": int(last),
-                "age": age_label(last, now),
-                "empty": files == 0,
-            })
+            # A topic dir: its root is one row, each investigation another.
+            # Not every subdir is an investigation -- `scripts/` and `docs/`
+            # belong to the root -- so a subdir counts only when notes-merge
+            # recorded it or it has its own .session.json. The Scratch line's
+            # subdir list is no help here: it names `scripts/` too.
+            row(slug, path, "topic", parent=slug)
+            absorbed = {a.get("subdir") or a.get("slug"): a
+                        for a in root_session.get("absorbed", [])}
+            listed = set(topics.get(slug, {}).get("subdirs", []))
+            for sub in sorted(os.scandir(path), key=lambda e: e.name):
+                if not sub.is_dir(follow_symlinks=False) or sub.name.startswith("."):
+                    continue
+                subpath = Path(sub.path)
+                if not (sub.name in absorbed
+                        or (subpath / ".session.json").is_file()):
+                    continue
+                rel = "{}/{}".format(slug, sub.name)
+                seen_dirs.add(rel)
+                row(rel, subpath, "investigation", parent=slug,
+                    absorbed_as=absorbed.get(sub.name), listed=sub.name in listed)
 
     missing = sorted({d for d in dir_topic if d not in seen_dirs})
 
@@ -362,8 +447,9 @@ def build():
 def emit_fzf(index):
     """Rows for the picker. Dir rows first (most recent first), then topic rows.
 
-    Selecting a topic row means "start a new dir under this topic" -- the caller
-    supplies the name from the query."""
+    Selecting a topic row means "start a new investigation in this topic" --
+    the caller supplies the name from the query. A dir row is opened as is:
+    `<topic>/` is the topic dir itself, `<topic>/<slug>` one investigation."""
     dirs = sorted(index["dirs"], key=lambda d: -d["last_activity"])
     topics = index["topics"]
 
@@ -372,7 +458,10 @@ def emit_fzf(index):
     def cap(values, lo, hi):
         return max(lo, min(hi, max(values, default=lo)))
 
-    width = cap([len(d["slug"]) for d in dirs], 20, 30)
+    def label(d):
+        return d["slug"] + "/" if d["kind"] == "topic" else d["slug"]
+
+    width = cap([len(label(d)) for d in dirs], 20, 40)
     twidth = cap([len(s) for s in topics], 16, 26)
 
     def elide(text, limit):
@@ -400,15 +489,25 @@ def emit_fzf(index):
         state = "" if d["wrapped"] else "UNWRAPPED"
         if d["empty"] and not d["transcripts"]:
             state = "empty"
+        if d["kind"] == "topic":
+            state = "[dir]"
         note = d["question"] or topics.get(d["topic"], {}).get("hook", "")
         # Former names go in the alias column: after a merge, searching for the
         # old dir name still has to find where the work went.
         aliases = alias_column(d["topics"])
-        absorbed = ", ".join(a.get("slug", "") for a in d["absorbed"])
+        # An investigation carries its own former name; a topic dir's root
+        # only those that did not land in a subdir of their own.
+        if d["kind"] == "investigation":
+            absorbed = d["absorbed_as"]
+        else:
+            subs = {x["name"] for x in index["dirs"] if x["parent"] == d["slug"]
+                    and x["kind"] == "investigation"}
+            absorbed = ", ".join(a.get("slug", "") for a in d["absorbed"]
+                                 if (a.get("subdir") or a.get("slug")) not in subs)
         if absorbed:
             aliases = "was: {}{}".format(absorbed, "; " + aliases if aliases else "")
         display = "  {:<{w}}  {:<{t}}  {:>5}  {:<9}  {:<46}  {}".format(
-            elide(d["slug"], width), elide(topic, twidth), d["age"], state,
+            elide(label(d), width), elide(topic, twidth), d["age"], state,
             elide(note, 46), elide(aliases, 40),
             w=width, t=twidth,
         )
@@ -417,7 +516,7 @@ def emit_fzf(index):
     for slug in sorted(topics):
         t = topics[slug]
         display = "+ {:<{w}}  {:<{t}}  {:>5}  {:<9}  {:<46}  {}".format(
-            "new dir in topic", elide(slug, twidth), "", "[topic]",
+            "new investigation", elide(slug, twidth), "", "[topic]",
             elide(t["hook"], 46), elide(alias_column([slug]), 40),
             w=width, t=twidth,
         )
@@ -428,13 +527,16 @@ def emit_fzf(index):
 
 
 def emit_redirects(index):
-    """`<old-slug>\t<current-slug>` for every absorbed dir, so the shell can
-    send an old name straight to the dir that absorbed it."""
+    """`<old-slug>\t<current-path>` for every absorbed dir, so the shell can
+    send an old name straight to where the work went: the investigation it
+    became when there is one, otherwise the dir that absorbed it."""
+    became = {(d["parent"], d["absorbed_as"]): d["slug"]
+              for d in index["dirs"] if d["absorbed_as"]}
     for d in index["dirs"]:
         for a in d["absorbed"]:
             slug = a.get("slug")
             if slug:
-                print("{}\t{}".format(slug, d["slug"]))
+                print("{}\t{}".format(slug, became.get((d["slug"], slug), d["slug"])))
 
 
 def emit_clusters(index):
@@ -447,6 +549,10 @@ def emit_clusters(index):
     by_topic = {}
     unrouted = []
     for d in index["dirs"]:
+        # Only top-level dirs are merge candidates: the rest already live in
+        # their topic.
+        if d["kind"] != "dir":
+            continue
         if not d["topics"]:
             if d["files"] or d["transcripts"]:
                 unrouted.append(d["slug"])

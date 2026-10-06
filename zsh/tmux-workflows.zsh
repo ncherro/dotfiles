@@ -10,7 +10,8 @@
 #   python3   bin/notes-index, which joins the notes dirs to the knowledge base
 #
 # Workflows:
-#   notes <topic>        open or create an investigation, routed against the KB
+#   notes <topic>        open or create an investigation, routed against the KB:
+#                        _notes/<topic>/<slug>, one tmux session per topic
 #   code <branch> -p …   start a coding session from one, in a linked worktree
 #   review <url>         review a PR in its own tmux window
 #   wip                  what am I in the middle of
@@ -866,6 +867,17 @@ review-gc() {
 # review already writes. It is the join key between a scratch dir, the
 # worktrees that investigation spawned, and the knowledge base topic it
 # distills into. `notes-index` reads it; `code` and `/wrap` write to it.
+#
+# Layout is two levels: _notes/<topic>/<slug>/, where <topic> is a knowledge
+# base topic slug and <slug> one investigation. An investigation with no topic
+# yet goes in _notes/inbox/<slug>/ until /wrap routes it. Dirs are addressed by
+# that path under NOTES_DIR ("rel"): `<topic>/<slug>`, `<topic>` for a topic
+# dir's root, or a bare `<slug>` for a dir that predates the layout.
+#
+# tmux follows the layout: one session per topic dir (notes--<topic>), one
+# window per investigation in it.
+
+: ${NOTES_INBOX:=inbox}
 
 # Normalize a free-text query into a directory name.
 _notes_slug() {
@@ -892,6 +904,45 @@ _notes_session_init() {
       worktrees: [], wrapped_at: null}' > "$meta"
 }
 
+# Whether a top-level dir is a topic dir (as opposed to a lone investigation
+# from before the layout): a knowledge base topic, the inbox, or a dir that
+# notes or notes-merge marked as one.
+_notes_is_topic_dir() {
+  local top="$1"
+  [[ "$top" == "$NOTES_INBOX" || -f "$NOTES_KB/topics/${top}.md" ]] && return 0
+  [[ -f "${NOTES_DIR}/${top}/.session.json" ]] && command -v jq &>/dev/null \
+    && jq -e --arg t "$top" '.kind == "topic" or ((.absorbed // []) != [] and .topic == $t)' \
+         "${NOTES_DIR}/${top}/.session.json" &>/dev/null
+}
+
+# Whether <topic>/<sub> is an investigation rather than a dir that belongs to
+# the topic root (scripts/, docs/): it has its own metadata, or notes-merge
+# recorded it as one.
+_notes_is_investigation() {
+  local top="$1" sub="$2"
+  [[ -f "${NOTES_DIR}/${top}/${sub}/.session.json" ]] && return 0
+  [[ -f "${NOTES_DIR}/${top}/.session.json" ]] && command -v jq &>/dev/null \
+    && jq -e --arg s "$sub" '(.absorbed // []) | any((.subdir // .slug) == $s)' \
+         "${NOTES_DIR}/${top}/.session.json" &>/dev/null
+}
+
+# Mark a topic dir's root, so notes-index lays it out as one even before the
+# knowledge base has a topic file for it.
+_notes_topic_init() {
+  local top="$1"
+  local meta="${NOTES_DIR}/${top}/.session.json"
+  [[ -f "$meta" ]] && return 0
+  command -v jq &>/dev/null || return 0
+  local topic="$top"
+  [[ "$top" == "$NOTES_INBOX" ]] && topic=""
+  jq -n \
+    --arg slug "$top" \
+    --arg created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg topic "$topic" \
+    '{slug: $slug, kind: "topic", created: $created, topic: $topic,
+      question: "", worktrees: [], wrapped_at: null, absorbed: []}' > "$meta"
+}
+
 # Set one top-level field. Writes via a temp file: jq cannot edit in place.
 _notes_session_set() {
   local dir="$1" key="$2" value="$3"
@@ -910,7 +961,8 @@ _notes_cache_stale() {
   [[ -s "$NOTES_CACHE" ]] || return 0
   local f
   for f in "$NOTES_DIR" "$NOTES_KB/index.md" "$NOTES_KB"/topics/*.md(N) \
-           "$NOTES_DIR"/*(/N) "$NOTES_DIR"/*/.session.json(N); do
+           "$NOTES_DIR"/*(/N) "$NOTES_DIR"/*/.session.json(N) \
+           "$NOTES_DIR"/*/*/.session.json(N); do
     [[ "$f" -nt "$NOTES_CACHE" ]] && return 0
   done
   return 1
@@ -927,9 +979,9 @@ _notes_reindex() {
 }
 
 # Resolve a query to one of:
-#   <slug>          an existing scratch dir
-#   +topic:<slug>   a new dir attached to that knowledge base topic
-#   +create:<slug>  a new, unattached dir
+#   <rel>           an existing dir: <topic>/<slug>, <topic>, or <slug>
+#   +topic:<slug>   a new investigation in that knowledge base topic
+#   +create:<slug>  a new investigation in the inbox
 #
 # Candidates come from notes-index, which matches against the KB's topic slugs,
 # frontmatter aliases and index hooks -- not just directory names. That is what
@@ -943,6 +995,18 @@ _notes_resolve() {
   # An exact dir name is an answer, not a query. Never open a picker for it.
   if [[ -d "${NOTES_DIR}/${slug}" ]]; then
     print -r -- "$slug"
+    return
+  fi
+  # ...including a path (`notes distribution-api/versioning`), and an
+  # investigation's own name when only one topic has one by that name.
+  if [[ "$query" == */* && -d "${NOTES_DIR}/${query%/}" ]]; then
+    print -r -- "${query%/}"
+    return
+  fi
+  local -a named
+  named=( "$NOTES_DIR"/*/"$slug"(/N) )
+  if (( ${#named} == 1 )) && _notes_is_investigation "${named[1]:h:t}" "$slug"; then
+    print -r -- "${named[1]:h:t}/${slug}"
     return
   fi
 
@@ -977,14 +1041,14 @@ _notes_resolve() {
     {
       cat "$NOTES_CACHE"
       printf '+ %-30s %-26s %5s  %-9s %s\t%s\n' \
-        "create unattached dir" "$slug" "" "[new]" \
-        "no knowledge base topic — /wrap will route it later" \
+        "new in ${NOTES_INBOX}" "$slug" "" "[new]" \
+        "no knowledge base topic yet — /wrap will route it later" \
         "+create:${slug}"
     } | fzf --height=~20 --reverse \
             --delimiter=$'\t' --with-nth=1 \
             --query="$query" --select-1 --exit-0 \
             --prompt='notes> ' \
-            --header='enter: open · a [topic] row starts a new dir under that topic' \
+            --header='enter: open · a [topic] row starts a new investigation in that topic' \
             --preview="'$NOTES_BIN/notes-preview' {2}" \
             --preview-window='right,52%,wrap,border-left'
   ) || return 1
@@ -993,12 +1057,58 @@ _notes_resolve() {
   print -r -- "${pick##*$'\t'}"
 }
 
-# Open a notes directory in a dedicated tmux session
+# Open the tmux window for a notes dir, creating session and window as
+# needed, and switch to it.
+#
+#   <topic>/<slug>  ->  session notes--<topic>, a window for <slug>
+#   <topic>         ->  session notes--<topic>, a window at the topic root
+#   <slug>          ->  session notes--<slug>  (a dir from before the layout)
+#
+# Windows are found by a @notes tag holding the rel path, falling back to the
+# pane's cwd for sessions opened before windows were tagged. Not by name:
+# automatic-rename is on, and tmux reads a dot in a `-t` target as a pane
+# separator.
+_notes_open() {
+  local rel="$1"
+  local dir="${NOTES_DIR}/${rel}"
+  local top="${rel%%/*}" win="${rel##*/}"
+  local session="notes--${top}"
+  local idx=""
+
+  if ! tmux has-session -t "=${session}" 2>/dev/null; then
+    idx=$(tmux new-session -d -P -F '#{window_index}' \
+      -s "$session" -n "$win" -c "$dir") || return 1
+  else
+    idx=$(tmux list-windows -t "=${session}" \
+        -F '#{window_index}'$'\t''#{@notes}'$'\t''#{pane_current_path}' \
+      | awk -F'\t' -v r="$rel" -v d="${dir:A}" \
+          '$2 == r { print $1; exit } $2 == "" && $3 == d && !f { f = $1 }
+           END { if (f != "") print f }' | head -1)
+    if [[ -z "$idx" ]]; then
+      idx=$(tmux new-window -d -P -F '#{window_index}' \
+        -t "=${session}:" -n "$win" -c "$dir") || return 1
+    fi
+  fi
+  tmux set-option -w -t "=${session}:${idx}" @notes "$rel" 2>/dev/null
+  tmux select-window -t "=${session}:${idx}"
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "=${session}"
+  else
+    tmux attach-session -t "=${session}"
+  fi
+}
+
+# Open an investigation in its topic's tmux session
 #
 # Usage:
-#   notes <topic>                       resolve against the KB, open or create
-#   notes <topic> -q "<question>"       record what the session is actually asking
-#   notes <topic> -t <kb-topic>         attach to a KB topic explicitly
+#   notes <query>                       resolve against the KB, open or create
+#   notes <topic>/<slug>                open that investigation directly
+#   notes <query> -q "<question>"       record what the session is actually asking
+#   notes <query> -t <kb-topic>         start it in that topic, skipping the picker
+#
+# New investigations land in _notes/<topic>/<slug>/, or _notes/inbox/<slug>/
+# when no topic fits yet.
 notes() {
   local question="" topic=""
   local -a positional
@@ -1018,44 +1128,60 @@ notes() {
   set -- "${positional[@]}"
 
   if [[ -z "$*" ]]; then
-    echo "Usage: notes <topic> [-q \"<question>\"] [-t <kb-topic>]"
+    echo "Usage: notes <query> [-q \"<question>\"] [-t <kb-topic>]"
     return 1
   fi
 
-  local resolved dirname
-  resolved=$(_notes_resolve "$@") || return 1
+  local slug rel resolved
+  slug=$(_notes_slug "$@")
+  [[ -n "$slug" ]] || return 1
 
-  case "$resolved" in
-    +topic:*)
-      # New dir named from the query, attached to the chosen KB topic.
-      topic="${resolved#+topic:}"
-      dirname=$(_notes_slug "$@") ;;
-    +create:*)
-      dirname="${resolved#+create:}" ;;
-    *)
-      dirname="$resolved" ;;
-  esac
-  [[ -n "$dirname" ]] || return 1
+  if [[ -n "$topic" ]]; then
+    # An explicit topic is the answer: no picker. An existing top-level dir of
+    # that name is still reused, and just gets tagged.
+    if [[ "$slug" == "$topic" ]]; then
+      rel="$topic"
+    elif [[ -d "${NOTES_DIR}/${slug}" ]] && ! _notes_is_topic_dir "$slug"; then
+      rel="$slug"
+    else
+      rel="${topic}/${slug}"
+    fi
+  else
+    resolved=$(_notes_resolve "$@") || return 1
+    case "$resolved" in
+      +topic:*)
+        topic="${resolved#+topic:}"
+        if [[ "$slug" == "$topic" ]]; then
+          rel="$topic"
+        else
+          rel="${topic}/${slug}"
+        fi ;;
+      +create:*)
+        rel="${NOTES_INBOX}/${resolved#+create:}" ;;
+      *)
+        rel="$resolved" ;;
+    esac
+  fi
+  [[ -n "$rel" ]] || return 1
 
-  local dir="${NOTES_DIR}/${dirname}"
+  local dir="${NOTES_DIR}/${rel}"
   mkdir -p "$dir" || return 1
 
-  _notes_session_init "$dir" "$dirname" "$topic" "$question"
+  if [[ "$rel" == */* ]]; then
+    _notes_topic_init "${rel%%/*}"
+    # The topic dir it lives in is its topic; inbox means none yet.
+    [[ -z "$topic" && "${rel%%/*}" != "$NOTES_INBOX" ]] && topic="${rel%%/*}"
+    _notes_session_init "$dir" "$rel" "$topic" "$question"
+  elif _notes_is_topic_dir "$rel"; then
+    _notes_topic_init "$rel"
+  else
+    _notes_session_init "$dir" "$rel" "$topic" "$question"
+  fi
   # -q/-t given for a dir that already exists should update it, not be dropped.
   [[ -n "$question" ]] && _notes_session_set "$dir" question "$question"
-  [[ -n "$topic" ]] && _notes_session_set "$dir" topic "$topic"
+  [[ -n "$topic" && "$rel" != "$topic" ]] && _notes_session_set "$dir" topic "$topic"
 
-  local session="notes--${dirname}"
-
-  if ! tmux has-session -t "$session" 2>/dev/null; then
-    tmux new-session -d -s "$session" -c "$dir"
-  fi
-
-  if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t "$session"
-  else
-    tmux attach-session -t "$session"
-  fi
+  _notes_open "$rel"
 }
 
 # Rebuild the routing table now, rather than waiting for it to go stale
@@ -1090,14 +1216,18 @@ notes-gc() {
   #   recoverable -- empty on disk but the transcript is substantial: real work
   #                  that was never distilled.
   local -a prunable dangling recoverable
+  # A topic dir's root is never pruned here: its investigations are what
+  # make it not empty.
   prunable=( ${(f)"$(print -r -- "$index" | jq -r '
     .dirs[]
-    | select(.files == 0 and .transcripts == 0 and (.topics | length) == 0)
+    | select(.kind != "topic")
+    | select(.files == 0 and .transcripts == 0 and (.kb_refs | length) == 0)
     | .slug')"} )
   dangling=( ${(f)"$(print -r -- "$index" | jq -r '
     .dirs[]
-    | select(.files == 0 and .transcripts == 0 and (.topics | length) > 0)
-    | "\(.slug)\t\(.topics | join(", "))"')"} )
+    | select(.kind != "topic")
+    | select(.files == 0 and .transcripts == 0 and (.kb_refs | length) > 0)
+    | "\(.slug)\t\(.kb_refs | join(", "))"')"} )
   recoverable=( ${(f)"$(print -r -- "$index" | jq -r '
     .dirs[]
     | select(.files == 0 and .transcripts > 0 and .wrapped == false)
@@ -1113,7 +1243,7 @@ notes-gc() {
   if (( ${#recoverable} )); then
     echo "Never distilled, and the transcript is the only artifact:"
     printf '  %s\n' "${recoverable[@]}" | column -t -s $'\t'
-    echo "  → claude --resume in the dir, or /wrap --recover <slug>"
+    echo "  → /wrap --recover <old-name> (moved dirs keep their transcript under it)"
     echo ""
   fi
 
@@ -1141,7 +1271,11 @@ notes-gc() {
       echo "  skipped ${slug} (not empty)"
       continue
     fi
-    tmux kill-session -t "notes--${slug}" 2>/dev/null
+    if [[ "$slug" == */* ]]; then
+      _notes_close_window "$slug"
+    else
+      tmux kill-session -t "=notes--${slug}" 2>/dev/null
+    fi
     rm -rf "${NOTES_DIR}/${slug}"
     echo "  removed ${slug}"
   done
@@ -1150,12 +1284,35 @@ notes-gc() {
 
 # --- Workflow: notes -> code handoff ---
 
-# Resolve the notes dir for the current directory, if we are in one.
+# Resolve the notes dir for the current directory, if we are in one, as its
+# path under NOTES_DIR: `<topic>/<slug>` inside an investigation, `<topic>` at
+# a topic dir's root (or in a dir that belongs to the root, like scripts/),
+# `<slug>` in a dir from before the layout.
 _notes_current_slug() {
   local dir="${PWD:A}" root="${NOTES_DIR:A}"
   [[ "$dir" == "$root"/* ]] || return 1
   local rest="${dir#$root/}"
-  print -r -- "${rest%%/*}"
+  local top="${rest%%/*}"
+  if [[ "$rest" == */* ]] && _notes_is_topic_dir "$top"; then
+    local sub="${rest#*/}"
+    sub="${sub%%/*}"
+    if _notes_is_investigation "$top" "$sub"; then
+      print -r -- "${top}/${sub}"
+      return
+    fi
+  fi
+  print -r -- "$top"
+}
+
+# Close the tmux window of an investigation, leaving the rest of its topic's
+# session alone.
+_notes_close_window() {
+  local rel="$1"
+  local session="notes--${rel%%/*}"
+  local idx
+  idx=$(tmux list-windows -t "=${session}" -F '#{window_index}'$'\t''#{@notes}' 2>/dev/null \
+    | awk -F'\t' -v r="$rel" '$2 == r { print $1; exit }')
+  [[ -n "$idx" ]] && tmux kill-window -t "=${session}:${idx}" 2>/dev/null
 }
 
 # Start a coding session from an investigation
@@ -1827,10 +1984,14 @@ _tmux_workflows_wt() {
 # Existing scratch dirs plus knowledge base topic slugs: typing a topic name
 # should reach it even when no dir is named that yet.
 _tmux_workflows_notes() {
-  local -a dirs topics
+  local -a dirs nested topics
   dirs=( "$NOTES_DIR"/*(/N:t) )
+  # Investigations inside topic dirs, as <topic>/<slug>.
+  nested=( "$NOTES_DIR"/*/*/.session.json(N:h) )
+  nested=( ${nested#$NOTES_DIR/} )
   topics=( "$NOTES_KB"/topics/*.md(N:t:r) )
   _describe -t dirs 'scratch dir' dirs
+  _describe -t nested 'investigation' nested
   _describe -t topics 'kb topic' topics
 }
 
