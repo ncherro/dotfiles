@@ -307,7 +307,7 @@ def build():
         for d in topics[slug]["scratch"]:
             dir_topic.setdefault(d, []).append(slug)
 
-    def row(rel, path, kind, parent="", absorbed_as=None, listed=False):
+    def row(rel, path, kind, parent="", absorbed_as=None, listed=False, history=()):
         """One index row. `rel` is the path under NOTES_DIR and doubles as the
         row's slug, so `_notes/<slug>` stays a valid path for every caller.
 
@@ -321,7 +321,8 @@ def build():
         # stays named after the path it was opened at, so a moved dir's
         # history lives under its old name.
         tdirs = [transcript_dir_for(rel)]
-        tdirs += [a.get("transcript_dir") for a in [absorbed_as] if a]
+        tdirs += [a.get("transcript_dir") for a in list(history) or [absorbed_as] if a]
+        tdirs = list(dict.fromkeys(t for t in tdirs if t))
         tc = tkb = 0
         tmtime = 0.0
         for name in tdirs:
@@ -417,8 +418,13 @@ def build():
             # recorded it or it has its own .session.json. The Scratch line's
             # subdir list is no help here: it names `scripts/` too.
             row(slug, path, "topic", parent=slug)
-            absorbed = {a.get("subdir") or a.get("slug"): a
-                        for a in root_session.get("absorbed", [])}
+            # The latest entry per subdir names it; earlier ones (a dir that
+            # moved twice) still hold transcripts.
+            absorbed, history = {}, {}
+            for a in root_session.get("absorbed", []):
+                key = a.get("subdir") or a.get("slug")
+                absorbed[key] = a
+                history.setdefault(key, []).append(a)
             listed = set(topics.get(slug, {}).get("subdirs", []))
             for sub in sorted(os.scandir(path), key=lambda e: e.name):
                 if not sub.is_dir(follow_symlinks=False) or sub.name.startswith("."):
@@ -430,7 +436,8 @@ def build():
                 rel = "{}/{}".format(slug, sub.name)
                 seen_dirs.add(rel)
                 row(rel, subpath, "investigation", parent=slug,
-                    absorbed_as=absorbed.get(sub.name), listed=sub.name in listed)
+                    absorbed_as=absorbed.get(sub.name), listed=sub.name in listed,
+                    history=history.get(sub.name, []))
 
     missing = sorted({d for d in dir_topic if d not in seen_dirs})
 
