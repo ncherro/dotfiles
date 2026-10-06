@@ -454,6 +454,23 @@ _review_parse_url() {
   _rv_number=$(echo "$url" | sed -E 's|.*/pull/([0-9]+).*|\1|')
 }
 
+# The GitHub host a PR URL lives on, falling back to REVIEW_GH_HOST. Reviews
+# span hosts (ghe.spotify.net, spotify.ghe.com), so every gh call has to ask
+# the host the PR came from rather than one global one. Into REPLY.
+_review_host() {
+  local url="$1"
+  REPLY=""
+  [[ "$url" == http*://*/* ]] && REPLY=$(echo "$url" | sed -E 's|https?://([^/]+)/.*|\1|')
+  [[ -n "$REPLY" ]] || REPLY="$REVIEW_GH_HOST"
+}
+
+# The host for a review dir, from the URL in its .review-meta.json. Into REPLY.
+_review_dir_host() {
+  local meta="$1/.review-meta.json" url=""
+  [[ -f "$meta" ]] && url=$(jq -r '.url // empty' "$meta" 2>/dev/null)
+  _review_host "$url"
+}
+
 _review_infer_from_dirname() {
   local dirname="$1"
   _rv_repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
@@ -561,9 +578,14 @@ review() {
   local dir="${REVIEWS_DIR}/${dirname}"
   mkdir -p "$dir"
 
+  _review_host "$url"
+  local host="$REPLY"
+
+  # gh prints an error body (a 404, say) to stdout, so only trust the output
+  # when the call succeeded.
   local head_commit="unknown" author="" pr_line
-  pr_line=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
-    --jq '.head.sha + "\t" + .user.login' 2>/dev/null)
+  pr_line=$(GH_HOST="$host" gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
+    --jq '.head.sha + "\t" + .user.login' 2>/dev/null) || pr_line=""
   if [[ -n "$pr_line" ]]; then
     head_commit="${pr_line%%$'\t'*}"
     author="${pr_line#*$'\t'}"
@@ -649,6 +671,8 @@ _review_probe() {
   local dir="$1" my_login="$2"
   local dirname="${dir:t}"
   local meta="${dir}/.review-meta.json"
+  _review_dir_host "$dir"
+  local host="$REPLY"
 
   local owner repo number head_commit="unknown" url=""
   if [[ -f "$meta" ]]; then
@@ -665,9 +689,9 @@ _review_probe() {
   fi
 
   local pr_json
-  pr_json=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
+  pr_json=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}" \
     --jq '{state: .state, merged: .merged, head: .head.sha, title: .title,
-           author: .user.login}' 2>/dev/null)
+           author: .user.login}' 2>/dev/null) || pr_json=""
 
   if [[ -z "$pr_json" ]]; then
     printf 'unknown\t%s\t-\tcould not fetch PR status\t%s\n' "$dirname" "$url"
@@ -702,8 +726,9 @@ _review_probe() {
 
   local my_review_state=""
   if [[ -n "$my_login" ]]; then
-    my_review_state=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
-      --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null)
+    my_review_state=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
+      --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null) \
+      || my_review_state=""
   fi
 
   local has_new_commits=0 reply_count=0
@@ -712,8 +737,9 @@ _review_probe() {
   if [[ -f "$meta" ]] && jq -e '.comments | length > 0' "$meta" &>/dev/null; then
     local my_comment_ids all_comments
     my_comment_ids=$(jq -r '[.comments[].id] | join(",")' "$meta")
-    all_comments=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
-      --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null)
+    all_comments=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
+      --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null) \
+      || all_comments=""
     if [[ -n "$all_comments" ]]; then
       reply_count=$(print -r -- "$all_comments" | jq --arg ids "$my_comment_ids" '
         ($ids | split(",") | map(tonumber)) as $mine |
@@ -744,16 +770,23 @@ _review_probe_all() {
   local -a dirs=( "${REVIEWS_DIR}"/*(/N) )
   (( ${#dirs} )) || return 0
 
-  local my_login
-  my_login=$(GH_HOST="$REVIEW_GH_HOST" gh api user --jq '.login' 2>/dev/null)
+  # Your login can differ per host, so look it up once for each host in use.
+  local -A logins
+  local d h
+  for d in "${dirs[@]}"; do
+    _review_dir_host "$d"
+    h="$REPLY"
+    (( ${+logins[$h]} )) && continue
+    logins[$h]=$(GH_HOST="$h" gh api user --jq '.login' 2>/dev/null) || logins[$h]=""
+  done
 
   local tmp
   tmp=$(mktemp -d) || return 1
   local -i i=0
-  local d
   for d in "${dirs[@]}"; do
     (( i++ ))
-    _review_probe "$d" "$my_login" > "${tmp}/$(printf '%03d' $i)" &
+    _review_dir_host "$d"
+    _review_probe "$d" "${logins[$REPLY]}" > "${tmp}/$(printf '%03d' $i)" &
     (( i % 6 )) || wait
   done
   wait
@@ -878,30 +911,11 @@ review-gc() {
   local reviews_dir="${REVIEWS_DIR}"
   local -a to_remove
 
-  # (/N): directories only, and no error when there are none to collect.
-  for dir in "$reviews_dir"/*(/N); do
-    [[ -d "$dir" ]] || continue
-    local dirname=$(basename "$dir")
-    local meta="${dir}.review-meta.json"
-
-    local owner repo number
-    if [[ -f "$meta" ]]; then
-      owner=$(jq -r '.owner' "$meta")
-      repo=$(jq -r '.repo' "$meta")
-      number=$(jq -r '.pr_number' "$meta")
-    else
-      repo=$(echo "$dirname" | sed -E 's/--[0-9]+$//')
-      number=$(echo "$dirname" | grep -oE '[0-9]+$')
-      owner="$REVIEW_DEFAULT_OWNER"
-    fi
-
-    local pr_state
-    pr_state=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
-      --jq '"\(.state):\(.merged)"' 2>/dev/null)
-
-    if [[ "$pr_state" == "closed:true" || "$pr_state" == "closed:false" ]]; then
-      to_remove+=("$dirname")
-    fi
+  # Same probe review-status uses, so the two always agree on what is merged.
+  local row state dirname
+  for row in ${(f)"$(_review_probe_all)"}; do
+    IFS=$'\t' read -r state dirname _ <<< "$row"
+    [[ "$state" == (merged|closed) ]] && to_remove+=("$dirname")
   done
 
   if (( ! ${#to_remove[@]} )); then
