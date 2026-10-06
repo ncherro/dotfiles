@@ -608,18 +608,17 @@ review() {
        | if $author != "" then .author = $author else . end' "$meta")
     printf '%s\n' "$tmp" > "$meta"
   else
-    cat > "$meta" <<EOF
-{
-  "url": "${url}",
-  "owner": "${_rv_owner}",
-  "repo": "${_rv_repo}",
-  "pr_number": ${_rv_number},
-  "author": "${author}",
-  "head_commit": "${head_commit}",
-  "reviewed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "comments": []
-}
-EOF
+    jq -n \
+      --arg url "$url" \
+      --arg owner "$_rv_owner" \
+      --arg repo "$_rv_repo" \
+      --argjson number "$_rv_number" \
+      --arg author "$author" \
+      --arg head "$head_commit" \
+      --arg reviewed "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '{url: $url, owner: $owner, repo: $repo, pr_number: $number,
+        author: $author, head_commit: $head, reviewed_at: $reviewed,
+        comments: []}' > "$meta"
   fi
 
   local session="pr-reviews"
