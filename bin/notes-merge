@@ -58,6 +58,9 @@ PRUNE = {"node_modules", ".git", ".venv", "__pycache__", "target", "dist"}
 TEXT_SUFFIXES = {".md", ".sh", ".zsh", ".bash", ".py", ".json", ".txt", ".yaml", ".yml"}
 
 SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# A dir to absorb can sit one level down -- `inbox/<slug>`, or an
+# investigation in the wrong topic -- since notes(1) nests them.
+REL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$")
 
 
 def die(msg):
@@ -201,7 +204,10 @@ def plan_link_repoints(moves, roots):
                 current = link.read_text(encoding="utf-8").strip()
             except OSError:
                 continue
-            slug = Path(current).name
+            try:
+                slug = str(Path(current).relative_to(NOTES_DIR))
+            except ValueError:
+                slug = Path(current).name
             if slug in wanted:
                 out.append((link, current, str(NOTES_DIR / wanted[slug])))
     return out
@@ -224,6 +230,61 @@ def tmux_sessions():
         return set(out.stdout.split())
     except (OSError, subprocess.SubprocessError):
         return set()
+
+
+def tmux_target_for(slug, live):
+    """The tmux session or window that holds a dir, or None.
+
+    A top-level dir has a session of its own (`notes--<slug>`). One nested in
+    a topic dir or the inbox has a window in the topic's session, tagged by
+    notes(1) with its path in @notes."""
+    if "/" not in slug:
+        name = "notes--{}".format(slug)
+        return ("session", name) if name in live else None
+    session = "notes--{}".format(slug.split("/", 1)[0])
+    if session not in live:
+        return None
+    try:
+        out = subprocess.run(
+            ["tmux", "list-windows", "-t", "=" + session,
+             "-F", "#{window_index}\t#{@notes}"],
+            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.stdout.splitlines():
+        idx, _, tag = line.partition("\t")
+        if tag == slug:
+            return ("window", "={}:{}".format(session, idx))
+    return None
+
+
+def claude_cwds():
+    """Working dirs, and --add-dir dirs, of every running Claude Code process.
+
+    The thing a move actually breaks is a running Claude session -- it holds
+    absolute paths and keeps writing to the transcript dir it opened with --
+    and a tmux session is only a proxy for one. Restored sessions are mostly
+    idle shells; this asks the processes directly."""
+    try:
+        pids = subprocess.run(["pgrep", "-f", r"(^|/)claude( |$)"],
+                              capture_output=True, text=True, timeout=10).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for pid in pids:
+        try:
+            r = subprocess.run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"],
+                               capture_output=True, text=True, timeout=10)
+            out += [l[1:] for l in r.stdout.splitlines() if l.startswith("n")]
+            # A coding session from `code` holds its notes dir through
+            # --add-dir, not its cwd.
+            args = subprocess.run(["ps", "-o", "args=", "-p", pid],
+                                  capture_output=True, text=True, timeout=10).stdout
+            out += [m.rstrip("/") for m in
+                    re.findall(r"--add-dir[ =]['\"]?([^ '\"]+)", args)]
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return out
 
 
 def main():
@@ -255,14 +316,14 @@ def main():
     for spec in args.absorb:
         slug, _, sub = spec.partition("=")
         slug = slug.strip("/")
-        if not SLUG_RE.match(slug):
+        if not REL_RE.match(slug):
             die("bad slug: {}".format(slug))
         if slug == target:
             die("cannot absorb {} into itself".format(slug))
         src = NOTES_DIR / slug
         if not src.is_dir():
             die("no such dir: {}".format(src))
-        sub = sub or default_subdir(target, slug)
+        sub = sub or default_subdir(target, slug.rsplit("/", 1)[-1])
         if not SLUG_RE.match(sub):
             die("bad subdir name: {}".format(sub))
         moves.append((slug, sub, target))
@@ -280,8 +341,17 @@ def main():
                              + ([target_dir] if target_dir.exists() else []))
 
     live = tmux_sessions()
-    kill = ["notes--{}".format(slug) for slug, _, _ in moves
-            if "notes--{}".format(slug) in live]
+    kill = [t for t in (tmux_target_for(slug, live) for slug, _, _ in moves) if t]
+
+    # Never move a dir out from under a running Claude session, whatever the
+    # flags say: --close-sessions closes tmux, not Claude.
+    running = []
+    cwds = claude_cwds()
+    for slug, _, _ in moves:
+        src = str((NOTES_DIR / slug).resolve())
+        if any(c == src or c.startswith(src + "/")
+               or os.path.realpath(c) == src for c in cwds):
+            running.append(slug)
     repoints = plan_link_repoints(moves, worktree_roots(args.worktrees))
 
     # --- report ---
@@ -327,14 +397,21 @@ def main():
             print("      {}  ->  {}".format(current, new))
         print("")
 
+    if running:
+        print("CLAUDE IS RUNNING in dirs being absorbed:")
+        for slug in running:
+            print("  {}".format(slug))
+        print("  → finish those sessions first; this will not move them")
+        print("")
+
     if kill:
         # A live session usually means a Claude session is running in that dir.
         # Its cwd survives the move (same inode) but any absolute path it is
         # holding does not, and it keeps writing to the transcript dir it opened
         # with. Closing it is the caller's call to make, not this script's.
-        print("LIVE tmux sessions for dirs being absorbed:")
-        for s in kill:
-            print("  {}".format(s))
+        print("LIVE tmux sessions/windows for dirs being absorbed:")
+        for kind, name in kill:
+            print("  {} {}".format(kind, name))
         if args.close_sessions:
             print("  → will be closed (--close-sessions)")
         else:
@@ -345,10 +422,13 @@ def main():
         print("dry run — nothing changed. Re-run with --apply.")
         return 0
 
+    if running:
+        die("refusing to move a dir with Claude running in it: {}"
+            .format(", ".join(running)))
     if kill and not args.close_sessions:
         die("refusing to move a dir with a live session: {}\n"
             "             finish or close it, drop it from this merge, or pass "
-            "--close-sessions".format(", ".join(kill)))
+            "--close-sessions".format(", ".join(name for _, name in kill)))
 
     # --- apply ---
     # Two merges in the same second must not share an undo dir: the second
@@ -431,6 +511,16 @@ def main():
     for slug, sub, _ in moves:
         if slug in known:
             continue
+        # A dir moving out of another topic dir takes the names it had there
+        # with it: its old transcripts are filed under them, and `notes <old
+        # name>` has to keep finding it.
+        if "/" in slug:
+            parent, name = slug.split("/", 1)
+            for a in load_session(NOTES_DIR / parent).get("absorbed", []):
+                if (a.get("subdir") or a.get("slug")) == name \
+                        and a.get("slug") not in known:
+                    absorbed.append(dict(a, subdir=sub))
+                    known.add(a.get("slug"))
         prior = load_session(target_dir / sub)
         absorbed.append({
             "slug": slug,
@@ -443,8 +533,23 @@ def main():
     (target_dir / ".session.json").write_text(
         json.dumps(session, indent=2) + "\n", encoding="utf-8")
 
-    for s in kill:
-        subprocess.run(["tmux", "kill-session", "-t", s],
+    # The moved dir's own metadata now describes where it is. A pending move
+    # recorded by /wrap is done.
+    for slug, sub, _ in moves:
+        own = load_session(target_dir / sub)
+        if not own:
+            continue
+        own["slug"] = "{}/{}".format(target, sub)
+        if not own.get("topic") and target != "inbox":
+            own["topic"] = target
+        own.pop("move_to", None)
+        own.pop("move_as", None)
+        (target_dir / sub / ".session.json").write_text(
+            json.dumps(own, indent=2) + "\n", encoding="utf-8")
+
+    for kind, name in kill:
+        cmd = "kill-session" if kind == "session" else "kill-window"
+        subprocess.run(["tmux", cmd, "-t", name if kind == "window" else "=" + name],
                        capture_output=True, timeout=10)
 
     undo = undo_dir / "undo.sh"

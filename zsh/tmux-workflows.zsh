@@ -18,6 +18,7 @@
 #   resume               reopen the tmux sessions a reboot took out
 #   recall <terms>       which dir was I working on that in
 #   notes-gc             prune notes dirs that hold nothing
+#   notes-settle         apply the moves /wrap recorded, once their sessions end
 #
 # Optional:
 #   GWT_SPARSE_CHECKOUT_CMD — function or command to run after creating a
@@ -1132,6 +1133,9 @@ notes() {
     return 1
   fi
 
+  # Finish any moves /wrap left pending, so the picker shows where things are.
+  notes-settle -q
+
   local slug rel resolved
   slug=$(_notes_slug "$@")
   [[ -n "$slug" ]] || return 1
@@ -1187,6 +1191,64 @@ notes() {
 # Rebuild the routing table now, rather than waiting for it to go stale
 notes-reindex() {
   _notes_reindex && echo "notes: reindexed $NOTES_CACHE"
+}
+
+# Apply the moves /wrap recorded
+#
+# /wrap routes an investigation to a topic, but cannot move the dir it runs in:
+# Claude is running there, and a move breaks its paths. So it records
+# `move_to` (and optionally `move_as`, the subdir name) in .session.json, and
+# this does the move once no Claude process is using the dir. notes(1) calls it
+# on the way in, so a wrapped investigation lands in its topic the next time
+# you open anything.
+#
+# Usage: notes-settle [-q]     -q: say nothing about dirs still in use
+notes-settle() {
+  local quiet=0
+  [[ "$1" == "-q" ]] && quiet=1
+  [[ -x "$NOTES_BIN/notes-merge" ]] && command -v jq &>/dev/null || return 0
+
+  local -a pending
+  pending=( ${(f)"$(grep -l '"move_to"' "$NOTES_DIR"/*/.session.json(N) \
+                     "$NOTES_DIR"/*/*/.session.json(N) 2>/dev/null)"} )
+  (( ${#pending} )) || return 0
+
+  # The window this shell is in, if it is a notes window.
+  local here=""
+  [[ -n "$TMUX_PANE" ]] && here=$(tmux display -p -t "$TMUX_PANE" '#{@notes}' 2>/dev/null)
+
+  local meta dir rel target sub out tmp moved=0
+  for meta in "${pending[@]}"; do
+    dir="${meta:h}"
+    rel="${dir#$NOTES_DIR/}"
+    target=$(jq -r '.move_to // empty' "$meta" 2>/dev/null)
+    sub=$(jq -r '.move_as // empty' "$meta" 2>/dev/null)
+    [[ -n "$target" ]] || continue
+
+    if [[ "$rel" == "${target}/"* ]]; then
+      # Already where it was headed; just clear the marker.
+      tmp=$(jq 'del(.move_to, .move_as)' "$meta") && printf '%s\n' "$tmp" > "$meta"
+      continue
+    fi
+    # Never from under the shell running this: the move closes that window.
+    if [[ "$here" == "$rel" || "${PWD:A}" == "${dir:A}" || "${PWD:A}" == "${dir:A}"/* ]]; then
+      (( quiet )) || print -r -- "notes: not moving ${rel} — this shell is in it"
+      continue
+    fi
+
+    if out=$("$NOTES_BIN/notes-merge" --target "$target" \
+               --absorb "${rel}${sub:+=$sub}" --close-sessions --apply 2>&1); then
+      print -r -- "notes: moved ${rel} → ${target}/${sub:-${rel##*/}}"
+      (( moved++ ))
+    elif [[ "$out" == *"Claude running"* ]]; then
+      (( quiet )) || print -r -- "notes: not moving ${rel} yet — Claude is running in it"
+    else
+      print -r -- "notes: could not move ${rel} into ${target}:"
+      print -r -- "  ${${(f)out}[-1]}"
+    fi
+  done
+  (( moved )) && _notes_reindex
+  return 0
 }
 
 # Prune notes dirs that hold nothing, and report the ones that only look empty
