@@ -537,13 +537,16 @@ def emit_redirects(index):
     """`<old-slug>\t<current-path>` for every absorbed dir, so the shell can
     send an old name straight to where the work went: the investigation it
     became when there is one, otherwise the dir that absorbed it."""
-    became = {(d["parent"], d["absorbed_as"]): d["slug"]
-              for d in index["dirs"] if d["absorbed_as"]}
+    # Every name a subdir has had points at that subdir, not just its latest:
+    # a dir that moved twice is still found by its first name.
+    exists = {d["slug"] for d in index["dirs"]}
     for d in index["dirs"]:
         for a in d["absorbed"]:
             slug = a.get("slug")
-            if slug:
-                print("{}\t{}".format(slug, became.get((d["slug"], slug), d["slug"])))
+            if not slug:
+                continue
+            sub = "{}/{}".format(d["slug"], a.get("subdir") or slug)
+            print("{}\t{}".format(slug, sub if sub in exists else d["slug"]))
 
 
 def emit_clusters(index):

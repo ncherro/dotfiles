@@ -516,11 +516,25 @@ def main():
         # name>` has to keep finding it.
         if "/" in slug:
             parent, name = slug.split("/", 1)
-            for a in load_session(NOTES_DIR / parent).get("absorbed", []):
-                if (a.get("subdir") or a.get("slug")) == name \
-                        and a.get("slug") not in known:
-                    absorbed.append(dict(a, subdir=sub))
-                    known.add(a.get("slug"))
+            parent_session = load_session(NOTES_DIR / parent)
+            kept = []
+            for a in parent_session.get("absorbed", []):
+                if (a.get("subdir") or a.get("slug")) == name:
+                    if a.get("slug") not in known:
+                        absorbed.append(dict(a, subdir=sub))
+                        known.add(a.get("slug"))
+                else:
+                    kept.append(a)
+            # The old topic no longer holds it; leaving the record there would
+            # send its old name back to a dir it has left.
+            if kept != parent_session.get("absorbed", []):
+                pf = NOTES_DIR / parent / ".session.json"
+                shutil.copy2(pf, backups / "{}-session.json".format(parent))
+                undo_files.append('cp "{}" "{}"'.format(
+                    backups / "{}-session.json".format(parent), pf))
+                parent_session["absorbed"] = kept
+                pf.write_text(json.dumps(parent_session, indent=2) + "\n",
+                              encoding="utf-8")
         prior = load_session(target_dir / sub)
         absorbed.append({
             "slug": slug,
