@@ -351,10 +351,22 @@ def main():
             "--close-sessions".format(", ".join(kill)))
 
     # --- apply ---
+    # Two merges in the same second must not share an undo dir: the second
+    # would overwrite the first's undo.sh and backups.
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    undo_dir = NOTES_DIR / ".merge-undo" / stamp
+    undo_root = NOTES_DIR / ".merge-undo"
+    undo_root.mkdir(parents=True, exist_ok=True)
+    n = 0
+    while True:
+        undo_dir = undo_root / (stamp if n == 0 else "{}-{}".format(stamp, n))
+        try:
+            undo_dir.mkdir()
+            break
+        except FileExistsError:
+            n += 1
+    stamp = undo_dir.name
     backups = undo_dir / "files"
-    backups.mkdir(parents=True, exist_ok=True)
+    backups.mkdir()
 
     # The undo script has to invert the steps in reverse order: some backed-up
     # files live *inside* the dirs that move, so restoring a file before its
