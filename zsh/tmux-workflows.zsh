@@ -514,6 +514,34 @@ _review_session() {
 # The bare name is the primary action, matching `notes`; review-status and
 # review-gc are the auxiliaries. `review-pr` stays as an alias for muscle
 # memory and because the Claude command is still called /review-pr.
+# The pr-reviews window name for a review dir: <repo>--<author>--<number>, so
+# a row of PR windows says whose PR each one is. Falls back to the dir name
+# (<repo>--<number>) when the author is not recorded yet. Into REPLY.
+_review_window_name() {
+  local dir="$1" author=""
+  local dirname="${dir:t}"
+  [[ -f "$dir/.review-meta.json" ]] \
+    && author=$(jq -r '.author // empty' "$dir/.review-meta.json" 2>/dev/null)
+  if [[ -n "$author" ]]; then
+    REPLY="${dirname%--*}--${author}--${dirname##*--}"
+  else
+    REPLY="$dirname"
+  fi
+  REPLY="${REPLY//./-}"
+}
+
+# The index of the pr-reviews window for a review dir, or empty. Found by the
+# @review tag, falling back to either name for windows opened before tagging,
+# so renaming them never opens a duplicate. Into REPLY.
+_review_find_window() {
+  local dirname="$1" name="$2"
+  REPLY=$(tmux list-windows -t "=pr-reviews" \
+      -F '#{window_index}'$'\t''#{@review}'$'\t''#{window_name}' 2>/dev/null \
+    | awk -F'\t' -v d="$dirname" -v n="$name" \
+        '$2 == d { print $1; exit } $2 == "" && ($3 == d || $3 == n) && !f { f = $1 }
+         END { if (f != "") print f }' | head -1)
+}
+
 review() {
   local url="$1"
   if [[ -z "$url" ]]; then
@@ -533,9 +561,13 @@ review() {
   local dir="${REVIEWS_DIR}/${dirname}"
   mkdir -p "$dir"
 
-  local head_commit
-  head_commit=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
-    --jq '.head.sha' 2>/dev/null || echo "unknown")
+  local head_commit="unknown" author="" pr_line
+  pr_line=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${_rv_owner}/${_rv_repo}/pulls/${_rv_number}" \
+    --jq '.head.sha + "\t" + .user.login' 2>/dev/null)
+  if [[ -n "$pr_line" ]]; then
+    head_commit="${pr_line%%$'\t'*}"
+    author="${pr_line#*$'\t'}"
+  fi
 
   local meta="${dir}/.review-meta.json"
   if [[ -f "$meta" ]]; then
@@ -548,8 +580,10 @@ review() {
     local tmp
     tmp=$(jq \
       --arg head "$head_commit" \
+      --arg author "$author" \
       --arg reviewed "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      '.head_commit = $head | .reviewed_at = $reviewed' "$meta")
+      '.head_commit = $head | .reviewed_at = $reviewed
+       | if $author != "" then .author = $author else . end' "$meta")
     printf '%s\n' "$tmp" > "$meta"
   else
     cat > "$meta" <<EOF
@@ -558,6 +592,7 @@ review() {
   "owner": "${_rv_owner}",
   "repo": "${_rv_repo}",
   "pr_number": ${_rv_number},
+  "author": "${author}",
   "head_commit": "${head_commit}",
   "reviewed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "comments": []
@@ -566,29 +601,35 @@ EOF
   fi
 
   local session="pr-reviews"
-  local window="${_rv_repo}--${_rv_number}"
+  _review_window_name "$dir"
+  local window="$REPLY" target
 
-  if ! tmux has-session -t "$session" 2>/dev/null; then
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
     tmux new-session -d -s "$session" -c "$REVIEWS_DIR"
   fi
 
-  if tmux list-windows -t "$session" -F '#{window_name}' | grep -qxF "$window"; then
-    tmux select-window -t "${session}:${window}"
+  _review_find_window "$dirname" "$window"
+  if [[ -n "$REPLY" ]]; then
+    target="=${session}:${REPLY}"
+    # An older window keeps its place but takes the new name.
+    tmux rename-window -t "$target" "$window" 2>/dev/null
   else
-    tmux new-window -t "$session" -n "$window" -c "$dir"
-    # automatic-rename is on globally and would rename this to `claude` and
-    # then `zsh`, after which the check above misses it and every re-review of
-    # the same PR opens another window for it.
-    tmux set-window-option -t "${session}:${window}" automatic-rename off >/dev/null
+    target="=${session}:$(tmux new-window -P -F '#{window_index}' \
+      -t "=${session}:" -n "$window" -c "$dir")"
   fi
+  # automatic-rename is on globally and would rename this to `claude` and then
+  # `zsh`. The @review tag is what finds the window again; the name is for you.
+  tmux set-window-option -t "$target" automatic-rename off >/dev/null
+  tmux set-option -w -t "$target" @review "$dirname" 2>/dev/null
+  tmux select-window -t "$target"
 
   _agent_cmd bypass
-  tmux send-keys -t "${session}:${window}" "${REPLY} '/review-pr $url'" Enter
+  tmux send-keys -t "$target" "${REPLY} '/review-pr $url'" Enter
 
   if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t "${session}:${window}"
+    tmux switch-client -t "=${session}"
   else
-    tmux attach-session -t "${session}:${window}"
+    tmux attach-session -t "=${session}"
   fi
 }
 
@@ -625,11 +666,21 @@ _review_probe() {
 
   local pr_json
   pr_json=$(GH_HOST="$REVIEW_GH_HOST" gh api "repos/${owner}/${repo}/pulls/${number}" \
-    --jq '{state: .state, merged: .merged, head: .head.sha, title: .title}' 2>/dev/null)
+    --jq '{state: .state, merged: .merged, head: .head.sha, title: .title,
+           author: .user.login}' 2>/dev/null)
 
   if [[ -z "$pr_json" ]]; then
     printf 'unknown\t%s\t-\tcould not fetch PR status\t%s\n' "$dirname" "$url"
     return
+  fi
+
+  # Reviews opened before the author was recorded get it now, so their
+  # windows can be named for it.
+  if [[ -f "$meta" ]] && ! jq -e '.author // empty' "$meta" &>/dev/null; then
+    local _author _tmp
+    _author=$(print -r -- "$pr_json" | jq -r '.author // empty')
+    [[ -n "$_author" ]] && _tmp=$(jq --arg a "$_author" '.author = $a' "$meta") \
+      && printf '%s\n' "$_tmp" > "$meta"
   fi
 
   local state is_merged current_head title
@@ -796,14 +847,23 @@ review-status() {
       echo "review-status: --windows needs to run inside tmux"
       return 0
     fi
-    local session="pr-reviews" existing opened=0
-    existing=$(tmux list-windows -t "=$session" -F '#{window_name}' 2>/dev/null)
+    local session="pr-reviews" opened=0 wname idx
     for dirname in "${actionable[@]}"; do
-      print -r -- "$existing" | grep -qxF "$dirname" && continue
-      tmux new-window -d -t "$session" -n "$dirname" -c "${reviews_dir}/${dirname}" 2>/dev/null || continue
+      _review_window_name "${reviews_dir}/${dirname}"
+      wname="$REPLY"
+      _review_find_window "$dirname" "$wname"
+      if [[ -n "$REPLY" ]]; then
+        # Already open; bring an old name up to date.
+        tmux rename-window -t "=${session}:${REPLY}" "$wname" 2>/dev/null
+        tmux set-option -w -t "=${session}:${REPLY}" @review "$dirname" 2>/dev/null
+        continue
+      fi
+      idx=$(tmux new-window -d -P -F '#{window_index}' -t "=${session}:" \
+        -n "$wname" -c "${reviews_dir}/${dirname}" 2>/dev/null) || continue
       # Same reason as the status window: automatic-rename would rename this
-      # the moment anything runs in it, and the check above would then miss it.
-      tmux set-window-option -t "${session}:${dirname}" automatic-rename off >/dev/null
+      # the moment anything runs in it. The @review tag finds it again.
+      tmux set-window-option -t "=${session}:${idx}" automatic-rename off >/dev/null
+      tmux set-option -w -t "=${session}:${idx}" @review "$dirname" 2>/dev/null
       (( opened++ ))
     done
     echo ""
@@ -856,7 +916,9 @@ review-gc() {
   echo ""
 
   for dirname in "${to_remove[@]}"; do
-    tmux kill-window -t "pr-reviews:${dirname}" 2>/dev/null
+    _review_window_name "${reviews_dir}/${dirname}"
+    _review_find_window "$dirname" "$REPLY"
+    [[ -n "$REPLY" ]] && tmux kill-window -t "=pr-reviews:${REPLY}" 2>/dev/null
     rm -rf "${reviews_dir}/${dirname}"
     echo "  removed ${dirname}"
   done
