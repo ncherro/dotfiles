@@ -1298,8 +1298,13 @@ notes-settle() {
   (( ${#pending} )) || return 0
 
   # The window this shell is in, if it is a notes window.
-  local here=""
-  [[ -n "$TMUX_PANE" ]] && here=$(tmux display -p -t "$TMUX_PANE" '#{@notes}' 2>/dev/null)
+  # And its session: a top-level dir's move closes all of notes--<slug>, not
+  # just one window.
+  local here="" here_session=""
+  if [[ -n "$TMUX_PANE" ]]; then
+    here=$(tmux display -p -t "$TMUX_PANE" '#{@notes}' 2>/dev/null)
+    here_session=$(tmux display -p -t "$TMUX_PANE" '#{session_name}' 2>/dev/null)
+  fi
 
   local meta dir rel target sub out tmp moved=0
   for meta in "${pending[@]}"; do
@@ -1314,8 +1319,10 @@ notes-settle() {
       tmp=$(jq 'del(.move_to, .move_as)' "$meta") && printf '%s\n' "$tmp" > "$meta"
       continue
     fi
-    # Never from under the shell running this: the move closes that window.
-    if [[ "$here" == "$rel" || "${PWD:A}" == "${dir:A}" || "${PWD:A}" == "${dir:A}"/* ]]; then
+    # Never from under the shell running this: the move closes that window,
+    # or that whole session for a top-level dir.
+    if [[ "$here" == "$rel" || "${PWD:A}" == "${dir:A}" || "${PWD:A}" == "${dir:A}"/* ]] \
+       || [[ "$rel" != */* && "$here_session" == "notes--${rel}" ]]; then
       (( quiet )) || print -r -- "notes: not moving ${rel} — this shell is in it"
       continue
     fi
