@@ -9,7 +9,9 @@
 #
 # idle shows what is known locally at once -- ready, when /review-pr has just
 # recorded its findings -- then asks GitHub in the background, so the label
-# catches up with a draft you just posted without holding the agent up.
+# catches up with a draft you just posted without holding the agent up. It
+# also records when, so an automatic re-review only reuses an agent that has
+# sat idle a while, and says when one of those has finished.
 
 [[ -n "$TMUX_PANE" && -f .review-meta.json ]] || exit 0
 source "${DOTFILES:-$HOME/Projects/dotfiles}/zsh/tmux-workflows.zsh" 2>/dev/null
@@ -25,8 +27,27 @@ case "$1" in
     ;;
   idle)
     tmux set-option -w -t "$window" @review_agent idle
+    tmux set-option -w -t "$window" @review_agent_idle_at "$EPOCHSECONDS"
     jq -e '.ready_at // empty' .review-meta.json &>/dev/null && state=ready
     _review_apply_state "$window" "$state" "$flags"
+
+    # An automatic re-review (see _review_launch) is done once its agent
+    # first goes idle. /review-pr records what it drafted next to ready_at.
+    if jq -e '.auto_kind // empty' .review-meta.json &>/dev/null; then
+      IFS=$'\t' read -r ready findings replies < <(jq -r \
+        '[.ready_at // "-", .ready_findings // 0, .ready_replies // 0] | @tsv' .review-meta.json)
+      if [[ "$ready" == "-" ]]; then
+        msg="Re-reviewed: nothing new to post"
+      else
+        msg="Re-reviewed: ${findings} findings, ${replies} replies to post"
+      fi
+      _review_window_name "$PWD"
+      osascript -e 'on run argv' \
+        -e 'display notification (item 1 of argv) with title (item 2 of argv)' \
+        -e 'end run' "$msg" "$REPLY" &>/dev/null
+      tmp=$(jq 'del(.auto_kind, .auto_started_at)' .review-meta.json) \
+        && printf '%s\n' "$tmp" > .review-meta.json
+    fi
     {
       _review_dir_host "$PWD"
       login=$(GH_HOST="$REPLY" gh api user --jq '.login' 2>/dev/null)

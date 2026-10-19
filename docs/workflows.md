@@ -96,7 +96,8 @@ See [Worktrees](worktrees.md) for the layout these create.
 |----------|-------------|
 | `review <url>` | Review a PR in the `pr-reviews` session with Claude Code (`review-pr` is an alias) |
 | `review` | Open that session with `review-status` already running in it |
-| `review-status` | State of every tracked review: findings ready to post, pending (unsubmitted) review, unanswered replies, new commits, commented, merged. `--windows` also opens a tmux window per review still wanting work |
+| `review-status` | State of every tracked review: findings ready to post, pending (unsubmitted) review, unanswered replies and top-level comments for you, new commits, commented, merged. `--windows` also opens a tmux window per review still wanting work |
+| `review-status --watch` | The same every `REVIEW_REFRESH_INTERVAL` seconds, re-reviewing a PR once it has gone `REVIEW_REREVIEW_QUIET` seconds (20m) without new commits or comments for you: new commits get a review of what changed, replies alone get `/review-pr --replies`. At most `REVIEW_REREVIEW_MAX` (2) start per pass; never your own PR, one with findings or a draft waiting for you, or one whose agent was used in the last 20m. A macOS notification says when each is done. `REVIEW_AUTO=0` turns it off |
 | `review-gc` | Drop review dirs whose PRs are merged or closed |
 
 ### Getting around
