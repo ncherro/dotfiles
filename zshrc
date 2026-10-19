@@ -1,5 +1,9 @@
 export DOTFILES=~/Projects/dotfiles
 
+# Keep PATH free of duplicates: every `export PATH=...:$PATH` below (and the
+# ones tooling appends to ~/.zshrc) adds again on each `exec zsh` or re-source.
+typeset -U path
+
 case "$(uname -s)" in
   Darwin) source $DOTFILES/zsh/mac.zsh ;;
   Linux)  source $DOTFILES/zsh/linux.zsh ;;
