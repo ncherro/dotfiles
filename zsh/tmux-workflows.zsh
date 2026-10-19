@@ -609,6 +609,7 @@ _review_icon_label() {
   case "$shown" in
     reviewing) _rv_icon="⟳" _rv_label="reviewing" ;;
     your-turn) _rv_icon="●" _rv_label="your turn" ;;
+    approvable) _rv_icon="★" _rv_label="approve?" ;;
     ready)     _rv_icon="●" _rv_label="ready" ;;
     pending)   _rv_icon="✎" _rv_label="draft" ;;
     attention) _rv_icon="✉" _rv_label="${flags%%,*}"
@@ -783,7 +784,8 @@ _review_launch() {
       --arg kind "$kind" \
       --argjson now "$EPOCHSECONDS" \
       '(if .head_commit != $head then .previous_head = .head_commit else . end)
-       | .head_commit = $head | .reviewed_at = $reviewed | del(.ready_at)
+       | .head_commit = $head | .reviewed_at = $reviewed
+       | del(.ready_at, .ready_findings, .ready_replies, .verdict, .verdict_head)
        | if $kind != "" then .auto_kind = $kind | .auto_started_at = $now
          else del(.auto_kind, .auto_started_at) end
        | if $author != "" then .author = $author else . end' "$meta")
@@ -862,9 +864,11 @@ alias review-pr=review
 # IFS=tab treats a run of tabs as a single delimiter, which silently shifts
 # every later field left.
 #
-# state is attention | pending | ready | updated | commented | open | approved |
-# merged | closed | unknown. pending: your review is drafted on the PR but not
-# submitted. ready: /review-pr has findings you have not posted yet.
+# state is attention | pending | approvable | ready | updated | commented |
+# open | approved | merged | closed | unknown. pending: your review is drafted
+# on the PR but not submitted. approvable: /review-pr's verdict was approve, at
+# the PR's current head. ready: /review-pr has findings you have not posted
+# yet.
 #
 # due is what an automatic re-review would do now -- commits (a review of what
 # changed) or replies (answer the threads) -- or "-" for nothing. It waits for
@@ -955,10 +959,11 @@ _review_probe() {
   # From the meta: when /review-pr last ran here, the activity last seen and
   # when it was first seen, and ready_at -- set by /review-pr once its findings
   # are ready, cleared by the next launch.
-  local reviewed_at="" ready_at="" seen_activity="" seen_at=0
+  local reviewed_at="" ready_at="" seen_activity="" seen_at=0 verdict="" verdict_head=""
   if [[ -f "$meta" ]]; then
-    IFS=$'\t' read -r reviewed_at ready_at seen_activity seen_at < <(jq -r \
-      '[.reviewed_at // "-", .ready_at // "-", .activity // "-", .activity_seen_at // 0]
+    IFS=$'\t' read -r reviewed_at ready_at seen_activity seen_at verdict verdict_head < <(jq -r \
+      '[.reviewed_at // "-", .ready_at // "-", .activity // "-", .activity_seen_at // 0,
+        .verdict // "-", .verdict_head // "-"]
        | @tsv' "$meta")
     [[ "$reviewed_at" == "-" ]] && reviewed_at=""
     [[ "$ready_at" == "-" ]] && ready_at=""
@@ -1045,6 +1050,10 @@ _review_probe() {
   elif (( has_pending )); then
     out_state=pending
     (( has_activity )) && flags="new activity"
+  elif [[ "$verdict" == approve* && "$verdict_head" == "$current_head" ]]; then
+    # A new commit makes the verdict stale, and the PR reads as updated.
+    out_state=approvable
+    [[ "$verdict" == approve-with-suggestions ]] && flags="suggestions"
   elif (( is_ready )); then
     out_state=ready
     (( has_activity )) && flags="new activity"
@@ -1059,7 +1068,7 @@ _review_probe() {
   local due="-" author
   author=$(print -r -- "$pr_json" | jq -r '.author // empty')
   if [[ -n "$my_login" && "$author" != "$my_login" ]] && (( quiet >= REVIEW_REREVIEW_QUIET )) \
-      && (( ! has_pending && ! is_ready )); then
+      && (( ! has_pending && ! is_ready )) && [[ "$out_state" != approvable ]]; then
     if (( has_new_commits )); then
       due=commits
     elif [[ "$out_state" != approved ]] && (( new_replies || new_comments )); then
@@ -1181,7 +1190,7 @@ review-status() {
     return 0
   fi
 
-  local -a attention pending ready updated commented open approved merged closed unknown
+  local -a attention pending approvable ready updated commented open approved merged closed unknown
   local -a actionable stale
   local row state dirname flags title url
 
@@ -1214,6 +1223,9 @@ review-status() {
       pending)
         pending+=( "  > $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
         actionable+=( "$dirname" ) ;;
+      approvable)
+        approvable+=( "  ★ $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" ) ;;
       ready)
         ready+=( "  > $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
         actionable+=( "$dirname" ) ;;
@@ -1235,6 +1247,7 @@ review-status() {
 
   local -a group_names group_vars
   (( ${#attention} )) && { echo "Needs attention:"; printf '%s\n' "${attention[@]}"; echo "" }
+  (( ${#approvable} )) && { echo "Ready to approve:"; printf '%s\n' "${approvable[@]}"; echo "" }
   (( ${#ready}     )) && { echo "Ready to post:";  printf '%s\n' "${ready[@]}";     echo "" }
   (( ${#pending}   )) && { echo "Pending review:"; printf '%s\n' "${pending[@]}";   echo "" }
   (( ${#updated}   )) && { echo "Updated:";        printf '%s\n' "${updated[@]}";   echo "" }

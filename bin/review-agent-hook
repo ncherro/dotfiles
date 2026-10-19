@@ -34,9 +34,13 @@ case "$1" in
     # An automatic re-review (see _review_launch) is done once its agent
     # first goes idle. /review-pr records what it drafted next to ready_at.
     if jq -e '.auto_kind // empty' .review-meta.json &>/dev/null; then
-      IFS=$'\t' read -r ready findings replies < <(jq -r \
-        '[.ready_at // "-", .ready_findings // 0, .ready_replies // 0] | @tsv' .review-meta.json)
-      if [[ "$ready" == "-" ]]; then
+      IFS=$'\t' read -r ready findings replies verdict < <(jq -r \
+        '[.ready_at // "-", .ready_findings // 0, .ready_replies // 0, .verdict // "-"]
+         | @tsv' .review-meta.json)
+      if [[ "$verdict" == approve* ]]; then
+        msg="Looks good to approve"
+        [[ "$ready" != "-" ]] && msg+=" (${findings} suggestions, ${replies} replies)"
+      elif [[ "$ready" == "-" ]]; then
         msg="Re-reviewed: nothing new to post"
       else
         msg="Re-reviewed: ${findings} findings, ${replies} replies to post"
