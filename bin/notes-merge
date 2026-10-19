@@ -18,7 +18,9 @@ that is easy to get quietly wrong:
     Claude Code transcript directory
   * repoints the .notes-link file in any worktree that came out of an absorbed
     dir, so /wrap from the coding session still finds its investigation
-  * refuses to move a dir that has a live tmux session, unless told otherwise
+  * refuses to move a dir that has a live tmux session, unless told otherwise;
+    when told to close one, opens a window at the new path first and, if the
+    merge is running inside the window being closed, switches to it
 
 That last point is the reason this script exists rather than a shell one-liner.
 A transcript dir is named after the path it was opened at
@@ -258,6 +260,53 @@ def tmux_target_for(slug, live):
     return None
 
 
+def tmux(*argv):
+    try:
+        return subprocess.run(["tmux", *argv], capture_output=True, text=True,
+                              timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def open_replacement(rel):
+    """Open (or find) the window for a moved dir at its new path, the way
+    notes(1) would, and return `<session>:<index>`, or None.
+
+    Done before closing the old window so the investigation never goes without
+    one -- and so the merge can hand over the client it is running in."""
+    session = "notes--{}".format(rel.split("/", 1)[0])
+    path = str(NOTES_DIR / rel)
+    name = rel.rsplit("/", 1)[-1]
+    if session not in tmux_sessions():
+        idx = tmux("new-session", "-d", "-P", "-F", "#{window_index}",
+                   "-s", session, "-n", name, "-c", path)
+    else:
+        idx = ""
+        for line in tmux("list-windows", "-t", "=" + session,
+                         "-F", "#{window_index}\t#{@notes}").splitlines():
+            i, _, tag = line.partition("\t")
+            if tag == rel:
+                idx = i
+                break
+        if not idx:
+            idx = tmux("new-window", "-d", "-P", "-F", "#{window_index}",
+                       "-t", "={}:".format(session), "-n", name, "-c", path)
+    if not idx:
+        return None
+    tmux("set-option", "-w", "-t", "={}:{}".format(session, idx), "@notes", rel)
+    return "{}:{}".format(session, idx)
+
+
+def own_tmux_target():
+    """The session and window this process runs in, or (None, None)."""
+    pane = os.environ.get("TMUX_PANE")
+    if not pane:
+        return None, None
+    session, _, idx = tmux("display-message", "-p", "-t", pane,
+                           "#{session_name}\t#{window_index}").partition("\t")
+    return (session or None), ("={}:{}".format(session, idx) if idx else None)
+
+
 def claude_cwds():
     """Working dirs, and --add-dir dirs, of every running Claude Code process.
 
@@ -341,7 +390,12 @@ def main():
                              + ([target_dir] if target_dir.exists() else []))
 
     live = tmux_sessions()
-    kill = [t for t in (tmux_target_for(slug, live) for slug, _, _ in moves) if t]
+    kill, kill_subs = [], {}
+    for slug, sub, _ in moves:
+        t = tmux_target_for(slug, live)
+        if t:
+            kill.append(t)
+            kill_subs[t] = sub
 
     # Never move a dir out from under a running Claude session, whatever the
     # flags say: --close-sessions closes tmux, not Claude.
@@ -413,7 +467,8 @@ def main():
         for kind, name in kill:
             print("  {} {}".format(kind, name))
         if args.close_sessions:
-            print("  → will be closed (--close-sessions)")
+            print("  → will be closed (--close-sessions), after opening a "
+                  "window at the new path")
         else:
             print("  → merge these dirs later, or pass --close-sessions")
         print("")
@@ -560,6 +615,20 @@ def main():
         own.pop("move_as", None)
         (target_dir / sub / ".session.json").write_text(
             json.dumps(own, indent=2) + "\n", encoding="utf-8")
+
+    # Replacement first, then close: if this merge runs inside one of the
+    # windows being closed, move the client over before its window goes.
+    own_session, own_window = own_tmux_target()
+    for kind, name in kill:
+        new = open_replacement("{}/{}".format(target, kill_subs[(kind, name)]))
+        if not new:
+            continue
+        print("opened:  {}".format(new))
+        if name == (own_session if kind == "session" else own_window):
+            client = tmux("display-message", "-p", "-t", os.environ["TMUX_PANE"],
+                          "#{client_tty}")
+            tmux("switch-client", *(["-c", client] if client else []),
+                 "-t", "=" + new)
 
     for kind, name in kill:
         cmd = "kill-session" if kind == "session" else "kill-window"

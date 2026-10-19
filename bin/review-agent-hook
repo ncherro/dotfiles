@@ -1,0 +1,38 @@
+#!/usr/bin/env zsh
+# review-agent-hook — tell a PR review's tmux window what its agent is doing.
+#
+# Claude Code runs this from its hooks in ~/.claude/settings.json:
+#   UserPromptSubmit   review-agent-hook busy
+#   Stop               review-agent-hook idle
+# Outside a review dir, or outside tmux, it does nothing, so the hooks can be
+# global rather than repeated in every review dir.
+#
+# idle shows what is known locally at once -- ready, when /review-pr has just
+# recorded its findings -- then asks GitHub in the background, so the label
+# catches up with a draft you just posted without holding the agent up.
+
+[[ -n "$TMUX_PANE" && -f .review-meta.json ]] || exit 0
+source "${DOTFILES:-$HOME/Projects/dotfiles}/zsh/tmux-workflows.zsh" 2>/dev/null
+
+window=$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null) || exit 0
+state=$(tmux show-options -wqv -t "$window" @review_state)
+flags=$(tmux show-options -wqv -t "$window" @review_flags)
+
+case "$1" in
+  busy)
+    tmux set-option -w -t "$window" @review_agent busy
+    _review_apply_state "$window" "$state" "$flags"
+    ;;
+  idle)
+    tmux set-option -w -t "$window" @review_agent idle
+    jq -e '.ready_at // empty' .review-meta.json &>/dev/null && state=ready
+    _review_apply_state "$window" "$state" "$flags"
+    {
+      _review_dir_host "$PWD"
+      login=$(GH_HOST="$REPLY" gh api user --jq '.login' 2>/dev/null)
+      IFS=$'\t' read -r state _ flags _ <<< "$(_review_probe "$PWD" "$login")"
+      [[ -n "$state" ]] && _review_apply_state "$window" "$state" "$flags"
+    } </dev/null &>/dev/null &!
+    ;;
+esac
+exit 0

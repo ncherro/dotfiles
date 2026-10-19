@@ -4,7 +4,7 @@
 # Usage:
 #   tmux-sessions          aligned list, newest first   (this is what `tls` runs)
 #   tmux-sessions --pick   fzf picker in a popup        (this is what `prefix + s` runs)
-#   tmux-sessions --rows   the picker's raw rows, for its own reload binding
+#   tmux-sessions --rows   the picker's raw rows, for its own reload bindings
 #
 # Why not `choose-tree -F`: that format is only the text *after* a fixed
 # "<session name>: " label, so the name prints twice and every column starts at
@@ -35,6 +35,9 @@ TOPIC_WIDTH=24
 NOTES_DIR="${NOTES_DIR:-$HOME/workspace/_notes}"
 NOTES_KB="${NOTES_KB:-$HOME/workspace/notes-kb}"
 NOTES_INBOX="${NOTES_INBOX:-inbox}"
+# Sessions the picker opens with their windows already expanded, space
+# separated. ctrl-o still collapses them.
+TMUX_SESSIONS_EXPANDED="${TMUX_SESSIONS_EXPANDED:-pr-reviews}"
 
 # A field of a .session.json, without paying for jq on every popup.
 session_field() {
@@ -80,6 +83,46 @@ shorten() {
   printf '%s' "${n#"$ME"/}"
 }
 
+# Claude Code sets its process title to its version, so a pane running it
+# reports "2.1.295" as its command. Show what it is instead.
+CLAUDE_VERSION='s/^[0-9]+\.[0-9]+\.[0-9]+$/claude/'
+
+# One indented row per window of a session, under its name column. The hidden
+# field is <session>:<index>, which the picker tells apart from a session by
+# the colon (tmux never allows one in a session name).
+window_rows() {
+  local sess="$1" idx name active cmd review mark
+  # A PR review window carries its state (see _review_apply_state), shown in
+  # the slot the session row uses for its window count and age. "-" stands in
+  # for none: read(1) collapses a run of tabs, so a field cannot be empty.
+  tmux list-windows -t "=$sess" -F '#{window_index}	#{window_name}	#{window_active}	#{pane_current_command}	#{?@review_label,#{@review_icon} #{@review_label},-}' 2>/dev/null \
+    | while IFS=$'\t' read -r idx name active cmd review; do
+        [ "$active" = 1 ] && mark="*" || mark="·"
+        [ "$review" = "-" ] && review=
+        # Padded by hand: printf pads by bytes, and the icons are three each.
+        while [ ${#review} -lt 12 ]; do review+=" "; done
+        case "$cmd" in zsh|bash|sh|login) cmd= ;; esac
+        cmd=$(printf '%s' "$cmd" | sed -E "$CLAUDE_VERSION")
+        # tmux names a window after its command unless told otherwise.
+        name=$(printf '%s' "$name" | sed -E "$CLAUDE_VERSION")
+        name="$idx: $name"
+        [ ${#name} -gt $((NAME_WIDTH - 2)) ] && name="${name:0:$((NAME_WIDTH - 3))}…"
+        # 12 columns stand in for the session row's window count and age, so
+        # the command lines up with the session's process column.
+        printf '%s %-5s %-*s %s %-*s %s %s\t%s\n' \
+          " " "" "$TOPIC_WIDTH" "" "$mark" "$((NAME_WIDTH - 2))" "$name" \
+          "$review" "$cmd" "$sess:$idx"
+      done
+}
+
+# The picker keeps the sessions you expanded, one name per line, in a scratch
+# dir it shares with its own bindings through this variable.
+OPEN_FILE="${TMUX_SESSIONS_STATE:+$TMUX_SESSIONS_STATE/open}"
+
+is_open() {
+  [ -n "$OPEN_FILE" ] && [ -f "$OPEN_FILE" ] && grep -qxF -- "$1" "$OPEN_FILE"
+}
+
 rows() {
   local ts att wins when sess path tag short procs topic rank
   # Pass 1: one line per session with its topic, keyed for grouping.
@@ -108,17 +151,53 @@ rows() {
         esac
         short=$(shorten "$sess")
         procs=$(tmux list-windows -t "=$sess" -F '#{pane_current_command}' 2>/dev/null \
-          | grep -vE '^(zsh|bash|sh|login)$' | sort -u | tr '\n' ' ')
+          | grep -vE '^(zsh|bash|sh|login)$' | sed -E "$CLAUDE_VERSION" \
+          | sort -u | tr '\n' ' ')
         [ ${#topic} -gt $TOPIC_WIDTH ] && topic="${topic:0:$((TOPIC_WIDTH - 1))}…"
         # Display, then the real name hidden behind a tab for the picker.
         printf '%s %-5s %-*s %-*s %2sw  %-5s  %s\t%s\n' \
           "$att" "$tag" "$TOPIC_WIDTH" "${topic:--}" "$NAME_WIDTH" "$short" \
           "$wins" "$when" "$procs" "$sess"
+        is_open "$sess" && window_rows "$sess"
       done
 }
 
 case "${1:-}" in
   --rows) rows ;;
+
+  # ctrl-o / alt-o in the picker: expand or collapse the highlighted session
+  # (a window row stands for its session), or all of them. Writes the new rows
+  # for the reload, and where the cursor should land once they are loaded --
+  # fzf 0.55 cannot keep it on the same item across a reload by itself.
+  --toggle|--toggle-all)
+    [ -n "$OPEN_FILE" ] || exit 1
+    touch "$OPEN_FILE"
+    sess="${2%%:*}"
+    if [ "$1" = --toggle-all ]; then
+      if [ -s "$OPEN_FILE" ]; then
+        : > "$OPEN_FILE"
+      else
+        tmux ls -F '#{session_name}' > "$OPEN_FILE"
+      fi
+    elif is_open "$sess"; then
+      grep -vxF -- "$sess" "$OPEN_FILE" > "$OPEN_FILE.new"
+      mv "$OPEN_FILE.new" "$OPEN_FILE"
+    else
+      printf '%s\n' "$sess" >> "$OPEN_FILE"
+    fi
+    rows > "$TMUX_SESSIONS_STATE/rows"
+    n=$(cut -f2 "$TMUX_SESSIONS_STATE/rows" | grep -nxF -- "$sess" | cut -d: -f1)
+    [ -n "$n" ] && echo "pos($n)" > "$TMUX_SESSIONS_STATE/pos"
+    ;;
+
+  # ctrl-x in the picker: a <session>:<index> row is a window, the rest are
+  # sessions.
+  --kill)
+    case "$2" in
+      *:*) tmux kill-window -t "=$2" ;;
+      *)   tmux kill-session -t "=$2" ;;
+    esac
+    ;;
 
   --pick)
     # A popup takes its stderr with it when it closes, so a failure in here is
@@ -128,14 +207,31 @@ case "${1:-}" in
       echo "--- $(date +%H:%M:%S) tty=$(tty 2>&1) fzf=$(command -v fzf)" >&2
     fi
     self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    TMUX_SESSIONS_STATE=$(mktemp -d "${TMPDIR:-/tmp}/tmux-sessions.XXXXXX")
+    export TMUX_SESSIONS_STATE
+    trap 'rm -rf "$TMUX_SESSIONS_STATE"' EXIT
+    state="$TMUX_SESSIONS_STATE"
+    # Set at the top before there was a state dir, so this first rows call
+    # would not see what is open.
+    OPEN_FILE="$state/open"
+    for s in $TMUX_SESSIONS_EXPANDED; do
+      tmux has-session -t "=$s" 2>/dev/null && printf '%s\n' "$s" >> "$OPEN_FILE"
+    done
     pick=$(rows | fzf --delimiter=$'\t' --with-nth=1 \
                       --reverse --no-sort \
                       --prompt='session> ' \
-                      --header='enter: switch · ctrl-x: kill' \
-                      --bind "ctrl-x:execute-silent(tmux kill-session -t '={2}')+reload($self --rows)")
+                      --header='enter: switch · ctrl-o: windows · alt-o: all windows · ctrl-x: kill' \
+                      --bind "ctrl-o:execute-silent($self --toggle {2})+reload(cat '$state/rows')" \
+                      --bind "alt-o:execute-silent($self --toggle-all {2})+reload(cat '$state/rows')" \
+                      --bind "load:transform(cat '$state/pos' 2>/dev/null; rm -f '$state/pos')" \
+                      --bind "ctrl-x:execute-silent($self --kill {2})+reload($self --rows)")
     [ -n "${TMUX_SESSIONS_DEBUG:-}" ] && echo "    fzf exit=$? pick=${pick:-<empty>}" >&2
     [ -n "$pick" ] || exit 0
-    sess="${pick##*$'\t'}"
+    target="${pick##*$'\t'}"
+    sess="${target%%:*}"
+    # A window row: make it the session's current window, then switch to the
+    # session as usual.
+    [ "$target" != "$sess" ] && tmux select-window -t "=$target"
     if [ -n "${TMUX:-}" ]; then
       tmux switch-client -t "=$sess"
     else
