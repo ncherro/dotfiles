@@ -750,10 +750,12 @@ _review_launch() {
         | awk '$2 ~ /^([0-9]+\.[0-9]+\.[0-9]+|claude|snipe)$/ { print $1; exit }')
       if [[ -n "$pane" ]]; then
         # An agent busy, or idle for less than the quiet period, may be one
-        # you are using: leave the window be rather than start a second.
+        # you are using: leave the window be rather than start a second. An
+        # idle agent with no time went idle before bin/review-agent-hook
+        # recorded one, and so has been idle at least that long.
         idle_at=$(tmux show-options -wqv -t "$target" @review_agent_idle_at)
         if [[ "$(tmux show-options -wqv -t "$target" @review_agent)" != idle ]] \
-            || (( EPOCHSECONDS - ${idle_at:-$EPOCHSECONDS} < REVIEW_REREVIEW_QUIET )); then
+            || (( EPOCHSECONDS - ${idle_at:-0} < REVIEW_REREVIEW_QUIET )); then
           REPLY="$target"
           return 3
         fi
