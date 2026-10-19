@@ -19,6 +19,14 @@ is your own username, both derived rather than configured. `tls` adds a last
 column for processes still running, which is what marks a session you were in
 the middle of.
 
+`pr-reviews` opens expanded, one row per review, ordered by what needs you:
+replies and findings to post first, then new commits and drafts, with
+commented and approved at the bottom. Each leads with the icon the status bar
+shows. Reviews whose window you closed are listed after them, dimmed, from the
+state `review-status` last wrote to `$REVIEWS_DIR/.status.tsv`; choosing one
+opens a window for it. Its session row counts reviews by state (`●4 ↻1 ✓4`)
+in place of a process list.
+
 Inside tmux it runs in a popup rather than `choose-tree`, whose `-F` format is
 only the text *after* a fixed `<session name>: ` label — the name cannot be
 shortened and no column can be aligned. `choose-tree` is still on
