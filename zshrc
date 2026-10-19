@@ -2,7 +2,14 @@ export DOTFILES=~/Projects/dotfiles
 
 # Keep PATH free of duplicates: every `export PATH=...:$PATH` below (and the
 # ones tooling appends to ~/.zshrc) adds again on each `exec zsh` or re-source.
+#
+# -U only dedupes when the `path` array is assigned, not the PATH string those
+# lines assign, so the array is reassigned once more before the first prompt
+# -- after ~/.zshrc has finished, tooling lines included.
 typeset -U path
+_dedupe_path() { path=($path); add-zsh-hook -d precmd _dedupe_path }
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _dedupe_path
 
 case "$(uname -s)" in
   Darwin) source $DOTFILES/zsh/mac.zsh ;;
