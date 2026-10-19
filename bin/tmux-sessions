@@ -97,10 +97,11 @@ CLAUDE_VERSION='s/^[0-9]+\.[0-9]+\.[0-9]+$/claude/'
 # finished ones last. Into RANK.
 review_rank() {
   case "$1" in
-    attention) RANK=0  ;; your-turn) RANK=1 ;; ready)     RANK=2 ;;
-    updated)   RANK=3  ;; pending)   RANK=4 ;; reviewing) RANK=5 ;;
-    open)      RANK=6  ;; commented) RANK=8 ;; approved)  RANK=9 ;;
-    merged)    RANK=10 ;; closed)    RANK=11 ;; *)        RANK=7 ;;
+    attention) RANK=0  ;; approvable) RANK=1 ;; your-turn) RANK=2 ;;
+    ready)     RANK=3  ;; updated)    RANK=4 ;; pending)   RANK=5 ;;
+    reviewing) RANK=6  ;; open)       RANK=7 ;; commented) RANK=9 ;;
+    approved)  RANK=10 ;; merged)     RANK=11 ;; closed)   RANK=12 ;;
+    *)         RANK=8  ;;
   esac
 }
 
