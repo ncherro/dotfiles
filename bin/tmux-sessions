@@ -38,6 +38,12 @@ NOTES_INBOX="${NOTES_INBOX:-inbox}"
 # Sessions the picker opens with their windows already expanded, space
 # separated. ctrl-o still collapses them.
 TMUX_SESSIONS_EXPANDED="${TMUX_SESSIONS_EXPANDED:-pr-reviews}"
+# The PR review session, and the state review-status last saw for every
+# review in it (see _review_write_status_cache).
+REVIEW_SESSION=pr-reviews
+REVIEWS_DIR="${REVIEWS_DIR:-$HOME/workspace/_reviews}"
+REVIEW_CACHE="$REVIEWS_DIR/.status.tsv"
+WORKFLOWS_ZSH="$(cd "$(dirname "$0")/.." && pwd)/zsh/tmux-workflows.zsh"
 
 # A field of a .session.json, without paying for jq on every popup.
 session_field() {
@@ -87,31 +93,94 @@ shorten() {
 # reports "2.1.295" as its command. Show what it is instead.
 CLAUDE_VERSION='s/^[0-9]+\.[0-9]+\.[0-9]+$/claude/'
 
+# Where a review sorts among its session's windows: what needs you first,
+# finished ones last. Into RANK.
+review_rank() {
+  case "$1" in
+    attention) RANK=0  ;; your-turn) RANK=1 ;; ready)     RANK=2 ;;
+    updated)   RANK=3  ;; pending)   RANK=4 ;; reviewing) RANK=5 ;;
+    open)      RANK=6  ;; commented) RANK=8 ;; approved)  RANK=9 ;;
+    merged)    RANK=10 ;; closed)    RANK=11 ;; *)        RANK=7 ;;
+  esac
+}
+
+# A session's windows, one line each: rank, index, icon, label, name, active,
+# command, target. A window that is not a review ranks -1, keeping its place
+# at the top. In pr-reviews the reviews with no window follow every window
+# (rank + 20), from what review-status last saw, with "@<dir>" for an index.
+#
+# A PR review window carries its state (see _review_apply_state). "-" stands
+# in for an empty field: read(1) collapses a run of tabs, so one cannot be
+# empty.
+window_items() {
+  local sess="$1" idx name active cmd shown icon label dir state flags url
+  local windowed=" "
+  while IFS=$'\t' read -r idx name active cmd shown icon label dir; do
+    if [ "$dir" = "-" ]; then
+      RANK=-1
+    else
+      review_rank "$shown"
+      windowed+="$dir "
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$RANK" "$idx" "$icon" "$label" "$name" "$active" "$cmd" "$sess:$idx"
+  done < <(tmux list-windows -t "=$sess" -F '#{window_index}	#{window_name}	#{window_active}	#{pane_current_command}	#{?@review_shown,#{@review_shown},#{?@review_state,#{@review_state},-}}	#{?@review_icon,#{@review_icon},-}	#{?@review_label,#{@review_label},-}	#{?@review,#{@review},-}' 2>/dev/null)
+
+  [ "$sess" = "$REVIEW_SESSION" ] && [ -f "$REVIEW_CACHE" ] || return 0
+  while IFS=$'\t' read -r state dir flags name icon label url; do
+    case "$windowed" in *" $dir "*) continue ;; esac
+    # Removed by review-gc since review-status last looked.
+    [ -d "$REVIEWS_DIR/$dir" ] || continue
+    review_rank "$state"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$((RANK + 20))" "@$dir" "$icon" "$label" "$name" 0 - "$sess:@$dir"
+  done < "$REVIEW_CACHE"
+}
+
+# The review states in a session as counts, in rank order: "✉1 ●4 ✓2".
+review_counts() {
+  window_items "$1" | awk -F'\t' '
+      $1 >= 0 && $3 != "-" {
+        r = $1 % 20; n[$3]++
+        if (!($3 in best) || r < best[$3]) best[$3] = r }
+      END { for (i in n) print best[i] "\t" i n[i] }' \
+    | sort -n | cut -f2 | tr '\n' ' '
+}
+
+# Pad to a width in characters. printf pads by bytes, and the icons are three
+# each.
+pad() {
+  local s="$1" n=$(($2 - ${#1}))
+  [ $n -gt 0 ] && printf -v s '%s%*s' "$s" "$n" ""
+  printf '%s' "$s"
+}
+
 # One indented row per window of a session, under its name column. The hidden
 # field is <session>:<index>, which the picker tells apart from a session by
-# the colon (tmux never allows one in a session name).
+# the colon (tmux never allows one in a session name). A review with no window
+# is dimmed, and its index is "@<dir>": choosing it opens a window for it.
 window_rows() {
-  local sess="$1" idx name active cmd review mark
-  # A PR review window carries its state (see _review_apply_state), shown in
-  # the slot the session row uses for its window count and age. "-" stands in
-  # for none: read(1) collapses a run of tabs, so a field cannot be empty.
-  tmux list-windows -t "=$sess" -F '#{window_index}	#{window_name}	#{window_active}	#{pane_current_command}	#{?@review_label,#{@review_icon} #{@review_label},-}' 2>/dev/null \
-    | while IFS=$'\t' read -r idx name active cmd review; do
+  local rank idx icon label name active cmd target mark dim off
+  window_items "$1" | sort -t$'\t' -k1,1n -k2,2n \
+    | while IFS=$'\t' read -r rank idx icon label name active cmd target; do
         [ "$active" = 1 ] && mark="*" || mark="·"
-        [ "$review" = "-" ] && review=
-        # Padded by hand: printf pads by bytes, and the icons are three each.
-        while [ ${#review} -lt 12 ]; do review+=" "; done
-        case "$cmd" in zsh|bash|sh|login) cmd= ;; esac
+        [ "$label" = "-" ] && label=
+        case "$cmd" in zsh|bash|sh|login|-) cmd= ;; esac
         cmd=$(printf '%s' "$cmd" | sed -E "$CLAUDE_VERSION")
         # tmux names a window after its command unless told otherwise.
         name=$(printf '%s' "$name" | sed -E "$CLAUDE_VERSION")
+        [ "$icon" != "-" ] && name="$icon $name"
+        dim= off=
+        case "$idx" in
+          @*) mark=" " idx="-" dim=$'\033[2m' off=$'\033[0m' ;;
+        esac
         name="$idx: $name"
         [ ${#name} -gt $((NAME_WIDTH - 2)) ] && name="${name:0:$((NAME_WIDTH - 3))}…"
         # 12 columns stand in for the session row's window count and age, so
         # the command lines up with the session's process column.
-        printf '%s %-5s %-*s %s %-*s %s %s\t%s\n' \
-          " " "" "$TOPIC_WIDTH" "" "$mark" "$((NAME_WIDTH - 2))" "$name" \
-          "$review" "$cmd" "$sess:$idx"
+        printf '%s %s%-5s %-*s %s %s %s %s%s\t%s\n' \
+          " " "$dim" "" "$TOPIC_WIDTH" "" "$mark" "$(pad "$name" $((NAME_WIDTH - 2)))" \
+          "$(pad "$label" 12)" "$cmd" "$off" "$target"
       done
 }
 
@@ -153,6 +222,8 @@ rows() {
         procs=$(tmux list-windows -t "=$sess" -F '#{pane_current_command}' 2>/dev/null \
           | grep -vE '^(zsh|bash|sh|login)$' | sed -E "$CLAUDE_VERSION" \
           | sort -u | tr '\n' ' ')
+        # The review session says where its reviews stand instead.
+        [ "$sess" = "$REVIEW_SESSION" ] && procs=$(review_counts "$sess")
         [ ${#topic} -gt $TOPIC_WIDTH ] && topic="${topic:0:$((TOPIC_WIDTH - 1))}…"
         # Display, then the real name hidden behind a tab for the picker.
         printf '%s %-5s %-*s %-*s %2sw  %-5s  %s\t%s\n' \
@@ -191,9 +262,11 @@ case "${1:-}" in
     ;;
 
   # ctrl-x in the picker: a <session>:<index> row is a window, the rest are
-  # sessions.
+  # sessions. A review with no window has nothing to kill; review-gc removes
+  # the review itself.
   --kill)
     case "$2" in
+      *:@*) ;;
       *:*) tmux kill-window -t "=$2" ;;
       *)   tmux kill-session -t "=$2" ;;
     esac
@@ -217,7 +290,7 @@ case "${1:-}" in
     for s in $TMUX_SESSIONS_EXPANDED; do
       tmux has-session -t "=$s" 2>/dev/null && printf '%s\n' "$s" >> "$OPEN_FILE"
     done
-    pick=$(rows | fzf --delimiter=$'\t' --with-nth=1 \
+    pick=$(rows | fzf --ansi --delimiter=$'\t' --with-nth=1 \
                       --reverse --no-sort \
                       --prompt='session> ' \
                       --header='enter: switch · ctrl-o: windows · alt-o: all windows · ctrl-x: kill' \
@@ -229,6 +302,15 @@ case "${1:-}" in
     [ -n "$pick" ] || exit 0
     target="${pick##*$'\t'}"
     sess="${target%%:*}"
+    # A review with no window: open one, through the same function
+    # review-status --windows uses, and go to it.
+    case "$target" in
+      *:@*)
+        idx=$(zsh -c 'source "$1" 2>/dev/null; _review_open_window "$2"; print -r -- "$REPLY"' \
+          _ "$WORKFLOWS_ZSH" "${target#*:@}")
+        target="$sess${idx:+:$idx}"
+        ;;
+    esac
     # A window row: make it the session's current window, then switch to the
     # session as usual.
     [ "$target" != "$sess" ] && tmux select-window -t "=$target"

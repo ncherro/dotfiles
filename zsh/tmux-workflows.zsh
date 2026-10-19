@@ -587,24 +587,33 @@ _review_apply_state() {
     shown=your-turn
   fi
 
-  local icon label
+  local _rv_icon _rv_label
+  _review_icon_label "$shown" "$flags"
+  tmux set-option -w -t "$target" @review_shown "$shown"
+  tmux set-option -w -t "$target" @review_icon "$_rv_icon"
+  tmux set-option -w -t "$target" @review_label "$_rv_label"
+}
+
+# What a state is drawn as, into _rv_icon and _rv_label (declare them local).
+# Shared by the windows and the status cache, so a review reads the same in
+# the picker whether or not it has a window.
+_review_icon_label() {
+  local shown="$1" flags="$2"
   case "$shown" in
-    reviewing) icon="⟳" label="reviewing" ;;
-    your-turn) icon="●" label="your turn" ;;
-    ready)     icon="●" label="ready" ;;
-    pending)   icon="✎" label="draft" ;;
-    attention) icon="✉" label="${flags%%,*}"
-               [[ "$flags" == *"new commits"* ]] && label+=" ↻" ;;
-    updated)   icon="↻" label="updated" ;;
-    commented) icon="✓" label="commented" ;;
-    open)      icon="○" label="open" ;;
-    approved)  icon="✔" label="approved" ;;
-    merged)    icon="✔" label="merged" ;;
-    closed)    icon="✗" label="closed" ;;
-    *)         icon="?" label="unknown" ;;
+    reviewing) _rv_icon="⟳" _rv_label="reviewing" ;;
+    your-turn) _rv_icon="●" _rv_label="your turn" ;;
+    ready)     _rv_icon="●" _rv_label="ready" ;;
+    pending)   _rv_icon="✎" _rv_label="draft" ;;
+    attention) _rv_icon="✉" _rv_label="${flags%%,*}"
+               [[ "$flags" == *"new commits"* ]] && _rv_label+=" ↻" ;;
+    updated)   _rv_icon="↻" _rv_label="updated" ;;
+    commented) _rv_icon="✓" _rv_label="commented" ;;
+    open)      _rv_icon="○" _rv_label="open" ;;
+    approved)  _rv_icon="✔" _rv_label="approved" ;;
+    merged)    _rv_icon="✔" _rv_label="merged" ;;
+    closed)    _rv_icon="✗" _rv_label="closed" ;;
+    *)         _rv_icon="?" _rv_label="unknown" ;;
   esac
-  tmux set-option -w -t "$target" @review_icon "$icon"
-  tmux set-option -w -t "$target" @review_label "$label"
 }
 
 # The same, for a review dir's window in pr-reviews, if it has one.
@@ -613,6 +622,50 @@ _review_set_window_state() {
   _review_window_name "${REVIEWS_DIR}/${dirname}"
   _review_find_window "$dirname" "$REPLY"
   [[ -n "$REPLY" ]] && _review_apply_state "=pr-reviews:${REPLY}" "$state" "$flags"
+}
+
+# A pr-reviews window for a review dir, opened in the background if it has
+# none, its name brought up to date if it has. The window's index into REPLY;
+# returns 1 when it was already open, 2 when it could not be opened.
+_review_open_window() {
+  local dirname="$1" session="pr-reviews" wname idx
+  _review_window_name "${REVIEWS_DIR}/${dirname}"
+  wname="$REPLY"
+  _review_find_window "$dirname" "$wname"
+  if [[ -n "$REPLY" ]]; then
+    tmux rename-window -t "=${session}:${REPLY}" "$wname" 2>/dev/null
+    tmux set-option -w -t "=${session}:${REPLY}" @review "$dirname" 2>/dev/null
+    return 1
+  fi
+  idx=$(tmux new-window -d -P -F '#{window_index}' -t "=${session}:" \
+    -n "$wname" -c "${REVIEWS_DIR}/${dirname}" 2>/dev/null) || return 2
+  # Same reason as the status window: automatic-rename would rename this the
+  # moment anything runs in it. The @review tag finds it again.
+  tmux set-window-option -t "=${session}:${idx}" automatic-rename off >/dev/null
+  tmux set-option -w -t "=${session}:${idx}" @review "$dirname" 2>/dev/null
+  # Show what review-status last saw until it next looks.
+  local state flags
+  IFS=$'\t' read -r state _ flags _ < <(awk -F'\t' -v d="$dirname" '$2 == d' \
+    "${REVIEWS_DIR}/.status.tsv" 2>/dev/null)
+  [[ -n "$state" ]] && _review_apply_state "=${session}:${idx}" "$state" "$flags"
+  REPLY="$idx"
+}
+
+# Every review's state as review-status last saw it, for the session picker to
+# list reviews that have no window: state, dir, flags, window name, icon,
+# label, url.
+# Written whole and moved into place, so the picker never reads half of one.
+_review_write_status_cache() {
+  local cache="${REVIEWS_DIR}/.status.tsv" row state dirname flags url _rv_icon _rv_label
+  {
+    for row in "$@"; do
+      IFS=$'\t' read -r state dirname flags _ url <<< "$row"
+      _review_icon_label "$state" "${flags#-}"
+      _review_window_name "${REVIEWS_DIR}/${dirname}"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$state" "$dirname" "$flags" "$REPLY" "$_rv_icon" "$_rv_label" "$url"
+    done
+  } > "${cache}.new" && mv "${cache}.new" "$cache"
 }
 
 # Point a review dir at its PR's current head and start /review-pr on it in
@@ -1063,28 +1116,15 @@ review-status() {
       echo "review-status: --windows needs to run inside tmux"
       return 0
     fi
-    local session="pr-reviews" opened=0 wname idx
+    local opened=0
     for dirname in "${actionable[@]}"; do
-      _review_window_name "${reviews_dir}/${dirname}"
-      wname="$REPLY"
-      _review_find_window "$dirname" "$wname"
-      if [[ -n "$REPLY" ]]; then
-        # Already open; bring an old name up to date.
-        tmux rename-window -t "=${session}:${REPLY}" "$wname" 2>/dev/null
-        tmux set-option -w -t "=${session}:${REPLY}" @review "$dirname" 2>/dev/null
-        continue
-      fi
-      idx=$(tmux new-window -d -P -F '#{window_index}' -t "=${session}:" \
-        -n "$wname" -c "${reviews_dir}/${dirname}" 2>/dev/null) || continue
-      # Same reason as the status window: automatic-rename would rename this
-      # the moment anything runs in it. The @review tag finds it again.
-      tmux set-window-option -t "=${session}:${idx}" automatic-rename off >/dev/null
-      tmux set-option -w -t "=${session}:${idx}" @review "$dirname" 2>/dev/null
-      (( opened++ ))
+      _review_open_window "$dirname" && (( opened++ ))
     done
     echo ""
     echo "${opened} window(s) opened, ${#actionable} review(s) still wanting work"
   fi
+
+  _review_write_status_cache "${rows[@]}"
 
   # Every open review window shows what was just found, whether or not
   # --windows opened it.
