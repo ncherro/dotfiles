@@ -57,6 +57,10 @@
 : ${REVIEW_GH_HOST:="github.com"}
 : ${REVIEW_DEFAULT_OWNER:=""}
 
+# How often `review-status --watch`, which the pr-reviews status window runs,
+# asks GitHub again, in seconds.
+: ${REVIEW_REFRESH_INTERVAL:=300}
+
 # Worktrees live inside the repo they belong to, at <repo>/.worktrees/<branch>
 # (slashes in the branch flattened to dashes). Nothing to manage but the repo
 # itself, and a worktree's repo is its grandparent dir rather than something
@@ -153,8 +157,8 @@ tat() {
   fi
   local session_name
   if git rev-parse --is-inside-work-tree &>/dev/null; then
-    local git_dir=$(cd "$(git rev-parse --git-dir)" && pwd)
-    local git_common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+    local git_dir=$(cd -q "$(git rev-parse --git-dir)" && pwd)
+    local git_common_dir=$(cd -q "$(git rev-parse --git-common-dir)" && pwd)
     local dirname=$(basename "$(dirname "$git_common_dir")")
     if [[ "$git_dir" != "$git_common_dir" ]]; then
       local branch=$(git rev-parse --abbrev-ref HEAD)
@@ -192,7 +196,7 @@ _worktree_path() { print -r -- "${1}/${WORKTREES_SUBDIR}/${2//\//-}"; }
 _main_repo_root() {
   local dir="${1:-$PWD}" common
   common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || return 1
-  common=$(cd "$dir" && cd "$common" && pwd) || return 1
+  common=$(cd -q "$dir" && cd -q "$common" && pwd) || return 1
   print -r -- "${common:h}"
 }
 
@@ -482,8 +486,8 @@ _review_infer_from_dirname() {
 #
 # `review <url>` adds a review to the session; `review` on its own gets you
 # back to the session, which a reboot or a stray kill-session takes with it.
-# Window 0 runs `review-status --windows`, so you land on the list *and* on a
-# window per review that still wants something. `resume` can recreate this session too, but deliberately starts
+# Window 0 runs `review-status --windows --watch`, so you land on the list *and*
+# on a window per review that still wants something, and their labels keep up. `resume` can recreate this session too, but deliberately starts
 # everything empty -- that is the difference between the two.
 _review_session() {
   local session="pr-reviews" target cmd
@@ -516,7 +520,7 @@ _review_session() {
   # is running something is how you end up in someone else's prompt.
   cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}')
   case "$cmd" in
-    zsh|bash|sh) tmux send-keys -t "$target" "review-status --windows" Enter ;;
+    zsh|bash|sh) tmux send-keys -t "$target" "review-status --windows --watch" Enter ;;
   esac
 
   if [[ -n "$TMUX" ]]; then
@@ -559,13 +563,72 @@ _review_find_window() {
          END { if (f != "") print f }' | head -1)
 }
 
-review() {
-  local url="$1"
-  if [[ -z "$url" ]]; then
-    _review_session
-    return
+# Show a review's state on its window, for the session picker and status bar
+#
+# The window carries it as options: @review_state and @review_flags (the probe's
+# state and flags, as last seen), and @review_icon and @review_label (what is
+# drawn). @review_agent is busy or idle, set by bin/review-agent-hook from
+# Claude Code's hooks. A busy agent outranks whatever GitHub says -- its
+# findings are not in yet -- and an idle one on a review with nothing to show
+# for it is waiting on you. busy only counts while an agent is still running in
+# the window, since an agent that is killed never reports idle.
+_review_apply_state() {
+  local target="$1" state="$2" flags="$3"
+  [[ "$flags" == "-" ]] && flags=""
+  tmux set-option -w -t "$target" @review_state "$state" 2>/dev/null || return 0
+  tmux set-option -w -t "$target" @review_flags "$flags"
+
+  local agent shown="$state"
+  agent=$(tmux show-options -wqv -t "$target" @review_agent)
+  if [[ "$agent" == busy ]] && tmux list-panes -t "$target" -F '#{pane_current_command}' \
+      | grep -qE '^([0-9]+\.[0-9]+\.[0-9]+|claude|snipe)$'; then
+    shown=reviewing
+  elif [[ "$agent" == idle && "$state" == open ]]; then
+    shown=your-turn
   fi
 
+  local icon label
+  case "$shown" in
+    reviewing) icon="⟳" label="reviewing" ;;
+    your-turn) icon="●" label="your turn" ;;
+    ready)     icon="●" label="ready" ;;
+    pending)   icon="✎" label="draft" ;;
+    attention) icon="✉" label="${flags%%,*}"
+               [[ "$flags" == *"new commits"* ]] && label+=" ↻" ;;
+    updated)   icon="↻" label="updated" ;;
+    commented) icon="✓" label="commented" ;;
+    open)      icon="○" label="open" ;;
+    approved)  icon="✔" label="approved" ;;
+    merged)    icon="✔" label="merged" ;;
+    closed)    icon="✗" label="closed" ;;
+    *)         icon="?" label="unknown" ;;
+  esac
+  tmux set-option -w -t "$target" @review_icon "$icon"
+  tmux set-option -w -t "$target" @review_label "$label"
+}
+
+# The same, for a review dir's window in pr-reviews, if it has one.
+_review_set_window_state() {
+  local dirname="$1" state="$2" flags="$3"
+  _review_window_name "${REVIEWS_DIR}/${dirname}"
+  _review_find_window "$dirname" "$REPLY"
+  [[ -n "$REPLY" ]] && _review_apply_state "=pr-reviews:${REPLY}" "$state" "$flags"
+}
+
+# Point a review dir at its PR's current head and start /review-pr on it in
+# the review's pr-reviews window
+#
+# With "background" it leaves focus where it is, so a batch of these does not
+# drag you from window to window; `review` focuses the window afterwards. The
+# window's target goes into REPLY. Returns 1 for a URL it cannot parse, 2 when
+# there is nothing new since the last review, and 3 when the window is running
+# something -- typing into that pane is how a stale agent ends up with the
+# command in its prompt -- in which case the meta is left alone, so the review
+# still reads as updated. A busy window's idle shell pane is used instead when
+# it has one, and with "split" as the third argument a new pane is opened below
+# when it does not.
+_review_launch() {
+  local url="$1" background="$2" split="$3"
   local _rv_owner _rv_repo _rv_number
   _review_parse_url "$url"
 
@@ -595,16 +658,41 @@ review() {
   if [[ -f "$meta" ]]; then
     local prev_commit
     prev_commit=$(jq -r '.head_commit' "$meta")
-    if [[ "$prev_commit" == "$head_commit" && "$head_commit" != "unknown" ]]; then
-      echo "No new commits since last review (${head_commit:0:7})"
-      return 0
+    [[ "$prev_commit" == "$head_commit" && "$head_commit" != "unknown" ]] && return 2
+  fi
+
+  local session="pr-reviews" target cmd pane
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$REVIEWS_DIR"
+  fi
+
+  _review_window_name "$dir"
+  _review_find_window "$dirname" "$REPLY"
+  if [[ -n "$REPLY" ]]; then
+    target="=${session}:${REPLY}"
+    cmd=$(tmux display-message -p -t "$target" '#{pane_current_command}')
+    if [[ "$cmd" != (zsh|bash|sh) ]]; then
+      # Any idle shell pane in the window will do, e.g. one an earlier split
+      # left behind.
+      pane=$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_current_command}' \
+        | awk '$2 ~ /^(zsh|bash|sh)$/ { print $1; exit }')
+      if [[ -z "$pane" && "$split" == split ]]; then
+        pane=$(tmux split-window -v -d -P -F '#{pane_id}' -t "$target" -c "$dir")
+      fi
+      if [[ -z "$pane" ]]; then
+        REPLY="$target"
+        return 3
+      fi
     fi
+  fi
+
+  if [[ -f "$meta" ]]; then
     local tmp
     tmp=$(jq \
       --arg head "$head_commit" \
       --arg author "$author" \
       --arg reviewed "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      '.head_commit = $head | .reviewed_at = $reviewed
+      '.head_commit = $head | .reviewed_at = $reviewed | del(.ready_at)
        | if $author != "" then .author = $author else . end' "$meta")
     printf '%s\n' "$tmp" > "$meta"
   else
@@ -617,40 +705,49 @@ review() {
       --arg head "$head_commit" \
       --arg reviewed "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       '{url: $url, owner: $owner, repo: $repo, pr_number: $number,
-        author: $author, head_commit: $head, reviewed_at: $reviewed,
-        comments: []}' > "$meta"
+        author: $author, head_commit: $head, reviewed_at: $reviewed}' > "$meta"
   fi
 
-  local session="pr-reviews"
+  # Named after the meta write, which may have just recorded the author.
   _review_window_name "$dir"
-  local window="$REPLY" target
-
-  if ! tmux has-session -t "=$session" 2>/dev/null; then
-    tmux new-session -d -s "$session" -c "$REVIEWS_DIR"
-  fi
-
-  _review_find_window "$dirname" "$window"
-  if [[ -n "$REPLY" ]]; then
-    target="=${session}:${REPLY}"
+  local window="$REPLY"
+  if [[ -n "$target" ]]; then
     # An older window keeps its place but takes the new name.
     tmux rename-window -t "$target" "$window" 2>/dev/null
   else
-    target="=${session}:$(tmux new-window -P -F '#{window_index}' \
+    target="=${session}:$(tmux new-window -d -P -F '#{window_index}' \
       -t "=${session}:" -n "$window" -c "$dir")"
   fi
   # automatic-rename is on globally and would rename this to `claude` and then
   # `zsh`. The @review tag is what finds the window again; the name is for you.
   tmux set-window-option -t "$target" automatic-rename off >/dev/null
   tmux set-option -w -t "$target" @review "$dirname" 2>/dev/null
-  tmux select-window -t "$target"
 
   _agent_cmd bypass
-  tmux send-keys -t "$target" "${REPLY} '/review-pr $url'" Enter
+  tmux send-keys -t "${pane:-$target}" "${REPLY} '/review-pr $url'" Enter
+  REPLY="$target"
+}
 
+review() {
+  local url="$1"
+  if [[ -z "$url" ]]; then
+    _review_session
+    return
+  fi
+
+  _review_launch "$url"
+  local rc=$? target="$REPLY"
+  case $rc in
+    1) return 1 ;;
+    2) echo "No new commits since last review"; return 0 ;;
+    3) echo "That review's window is running something -- run /review-pr there, or exit it and re-run review" ;;
+  esac
+
+  tmux select-window -t "$target"
   if [[ -n "$TMUX" ]]; then
-    tmux switch-client -t "=${session}"
+    tmux switch-client -t "=pr-reviews"
   else
-    tmux attach-session -t "=${session}"
+    tmux attach-session -t "=pr-reviews"
   fi
 }
 
@@ -662,7 +759,9 @@ alias review-pr=review
 # IFS=tab treats a run of tabs as a single delimiter, which silently shifts
 # every later field left.
 #
-# state is attention | updated | open | approved | merged | closed | unknown.
+# state is attention | pending | ready | updated | commented | open | approved |
+# merged | closed | unknown. pending: your review is drafted on the PR but not
+# submitted. ready: /review-pr has findings you have not posted yet.
 # Split out of review-status so the calls can be fanned out, and so the session
 # builder can act on exactly the data the report renders rather than scraping
 # it back out of formatted text.
@@ -723,26 +822,46 @@ _review_probe() {
     return
   fi
 
-  local my_review_state=""
+  # Your reviews, as: pending draft (0/1), latest submitted state, when it was
+  # submitted. A pending review is only ever visible to its author, so it is
+  # always yours.
+  local my_reviews="" has_pending=0 my_review_state="" my_submitted_at=""
   if [[ -n "$my_login" ]]; then
-    my_review_state=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}/reviews" \
-      --jq "[.[] | select(.user.login == \"${my_login}\")] | last | .state // empty" 2>/dev/null) \
-      || my_review_state=""
+    my_reviews=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100" \
+      --jq "[.[] | select(.user.login == \"${my_login}\")]
+            | [(map(select(.state == \"PENDING\")) | length > 0 | if . then 1 else 0 end),
+               (map(select(.state != \"PENDING\")) | last | .state // \"-\"),
+               (map(select(.state != \"PENDING\")) | last | .submitted_at // \"-\")]
+            | @tsv" 2>/dev/null) || my_reviews=""
   fi
+  if [[ -n "$my_reviews" ]]; then
+    IFS=$'\t' read -r has_pending my_review_state my_submitted_at <<< "$my_reviews"
+    [[ "$my_review_state" == "-" ]] && my_review_state=""
+    [[ "$my_submitted_at" == "-" ]] && my_submitted_at=""
+  fi
+
+  # Set by /review-pr once its findings are ready, cleared by the next launch.
+  local ready_at=""
+  [[ -f "$meta" ]] && ready_at=$(jq -r '.ready_at // empty' "$meta")
 
   local has_new_commits=0 reply_count=0
   [[ "$head_commit" != "unknown" && "$head_commit" != "$current_head" ]] && has_new_commits=1
 
-  if [[ -f "$meta" ]] && jq -e '.comments | length > 0' "$meta" &>/dev/null; then
-    local my_comment_ids all_comments
-    my_comment_ids=$(jq -r '[.comments[].id] | join(",")' "$meta")
+  # Replies you have not answered: comments from anyone else in a thread you
+  # are part of, newer than your last comment in it. GitHub points every reply
+  # at the thread's first comment, so that comment's id names the thread.
+  if [[ -n "$my_login" ]]; then
+    local all_comments
     all_comments=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}/comments" \
-      --paginate --jq '[.[] | {id, in_reply_to_id, user: .user.login}]' 2>/dev/null) \
+      --paginate --jq '.[] | {id, in_reply_to_id, created_at, user: .user.login}' 2>/dev/null) \
       || all_comments=""
     if [[ -n "$all_comments" ]]; then
-      reply_count=$(print -r -- "$all_comments" | jq --arg ids "$my_comment_ids" '
-        ($ids | split(",") | map(tonumber)) as $mine |
-        [.[] | select(.in_reply_to_id != null and (.in_reply_to_id | IN($mine[])))] | length')
+      reply_count=$(print -r -- "$all_comments" | jq -s --arg me "$my_login" '
+        map(. + {thread: ((.in_reply_to_id // .id) | tostring)}) as $all
+        | ($all | map(select(.user == $me)) | group_by(.thread)
+           | map({key: .[0].thread, value: (map(.created_at) | max)}) | from_entries) as $mine
+        | [$all[] | select(.user != $me and $mine[.thread] != null
+                           and .created_at > $mine[.thread])] | length')
     fi
   fi
 
@@ -752,8 +871,14 @@ _review_probe() {
     local flags="${reply_count} replies"
     (( has_new_commits )) && flags+=", new commits"
     printf 'attention\t%s\t%s\t%s\t%s\n' "$dirname" "$flags" "$short_title" "$url"
+  elif (( has_pending )); then
+    printf 'pending\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+  elif [[ -n "$ready_at" && ( -z "$my_submitted_at" || "$my_submitted_at" < "$ready_at" ) ]]; then
+    printf 'ready\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
   elif (( has_new_commits )); then
     printf 'updated\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
+  elif [[ -n "$my_review_state" ]]; then
+    printf 'commented\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
   else
     printf 'open\t%s\t-\t%s\t%s\n' "$dirname" "$short_title" "$url"
   fi
@@ -797,10 +922,36 @@ _review_probe_all() {
 #
 #   review-status              the report
 #   review-status --windows    + a tmux window per review still wanting work
+#   review-status --rereview   + /review-pr again on every PR with new commits
+#   review-status --watch      all of that, then again every
+#                              REVIEW_REFRESH_INTERVAL seconds until ctrl-c
+#
+# --watch is what keeps the window labels current between agent runs: replies
+# and new commits only show up when something asks GitHub. --windows and
+# --rereview act on the first pass only -- afterwards they would reopen windows
+# you closed, and re-review on a timer.
 review-status() {
   setopt local_options typeset_silent no_xtrace no_verbose
-  local open_windows=0
-  [[ "$1" == "--windows" ]] && open_windows=1
+  local open_windows=0 rereview=0 watch=0 arg
+  for arg in "$@"; do
+    case "$arg" in
+      --windows)  open_windows=1 ;;
+      --rereview) rereview=1 ;;
+      --watch)    watch=1 ;;
+      *) echo "usage: review-status [--windows] [--rereview] [--watch]" >&2; return 1 ;;
+    esac
+  done
+
+  if (( watch )); then
+    local -a once=( "${(@)argv:#--watch}" )
+    while true; do
+      clear
+      review-status "${once[@]}"
+      once=()
+      print -P "\n%F{8}Refreshed $(date +%H:%M), again every $(( REVIEW_REFRESH_INTERVAL / 60 ))m. ctrl-c to stop.%f"
+      sleep "$REVIEW_REFRESH_INTERVAL"
+    done
+  fi
 
   local reviews_dir="${REVIEWS_DIR}"
   if [[ ! -d "$reviews_dir" ]]; then
@@ -839,40 +990,73 @@ review-status() {
     return 0
   fi
 
-  local -a attention updated open approved merged closed unknown actionable
+  local -a attention pending ready updated commented open approved merged closed unknown
+  local -a actionable stale
   local row state dirname flags title url
+
+  # Each row is labelled <repo>--<author>--<number>, or the dir name when the
+  # author is not recorded. The column is as wide as the longest label.
+  local -A labels
+  local author
+  local -i w=28
+  for row in "${rows[@]}"; do
+    IFS=$'\t' read -r state dirname _ <<< "$row"
+    author=$(jq -r '.author // empty' "${reviews_dir}/${dirname}/.review-meta.json" 2>/dev/null)
+    if [[ -n "$author" ]]; then
+      labels[$dirname]="${dirname%--*}--${author}--${dirname##*--}"
+    else
+      labels[$dirname]="$dirname"
+    fi
+    (( ${#labels[$dirname]} > w )) && w=${#labels[$dirname]}
+  done
+
+  local label
   for row in "${rows[@]}"; do
     IFS=$'\t' read -r state dirname flags title url <<< "$row"
     [[ "$flags" == "-" ]] && flags=""
+    label="${labels[$dirname]}"
     case "$state" in
       attention)
-        attention+=( "  * $(printf '%-28s %-20s %s' "$dirname" "[$flags]" "$title")" "    ${url}" "" )
+        attention+=( "  * $(printf '%-*s %-20s %s' $w "$label" "[$flags]" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" )
+        [[ "$flags" == *"new commits"* ]] && stale+=( "$url" ) ;;
+      pending)
+        pending+=( "  > $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" ) ;;
+      ready)
+        ready+=( "  > $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
         actionable+=( "$dirname" ) ;;
       updated)
-        updated+=( "  ~ $(printf '%-28s %s' "$dirname" "$title")" "    ${url}" "" )
-        actionable+=( "$dirname" ) ;;
+        updated+=( "  ~ $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
+        actionable+=( "$dirname" )
+        stale+=( "$url" ) ;;
+      commented)
+        commented+=( "    $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" ) ;;
       open)
-        open+=( "    $(printf '%-28s %s' "$dirname" "$title")" "    ${url}" "" )
+        open+=( "    $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" )
         actionable+=( "$dirname" ) ;;
-      approved) approved+=( "    $(printf '%-28s %s' "$dirname" "$title")" "    ${url}" "" ) ;;
-      merged)   merged+=( "  $(printf '%-30s %s' "$dirname" "$title")" "    ${url}" "" ) ;;
-      closed)   closed+=( "  $(printf '%-30s %s' "$dirname" "$title")" "    ${url}" "" ) ;;
-      *)        unknown+=( "  ? ${dirname}  (${title})" ) ;;
+      approved) approved+=( "    $(printf '%-*s %s' $w "$label" "$title")" "    ${url}" "" ) ;;
+      merged)   merged+=( "  $(printf '%-*s %s' $(( w + 2 )) "$label" "$title")" "    ${url}" "" ) ;;
+      closed)   closed+=( "  $(printf '%-*s %s' $(( w + 2 )) "$label" "$title")" "    ${url}" "" ) ;;
+      *)        unknown+=( "  ? ${label}  (${title})" ) ;;
     esac
   done
 
   local -a group_names group_vars
   (( ${#attention} )) && { echo "Needs attention:"; printf '%s\n' "${attention[@]}"; echo "" }
+  (( ${#ready}     )) && { echo "Ready to post:";  printf '%s\n' "${ready[@]}";     echo "" }
+  (( ${#pending}   )) && { echo "Pending review:"; printf '%s\n' "${pending[@]}";   echo "" }
   (( ${#updated}   )) && { echo "Updated:";        printf '%s\n' "${updated[@]}";   echo "" }
   (( ${#open}      )) && { echo "Open:";           printf '%s\n' "${open[@]}";      echo "" }
+  (( ${#commented} )) && { echo "Commented:";      printf '%s\n' "${commented[@]}"; echo "" }
   (( ${#approved}  )) && { echo "Approved:";       printf '%s\n' "${approved[@]}";  echo "" }
   (( ${#merged}    )) && { echo "Merged:";         printf '%s\n' "${merged[@]}";    echo "" }
   (( ${#closed}    )) && { echo "Closed:";         printf '%s\n' "${closed[@]}" }
   (( ${#unknown}   )) && { echo "Unknown:";        printf '%s\n' "${unknown[@]}" }
 
   # A window each for the reviews still wanting something, so the session you
-  # come back to is the work rather than a list of it. Approved, merged and
-  # closed get nothing -- there is no work left in them.
+  # come back to is the work rather than a list of it. Commented, approved,
+  # merged and closed get nothing -- there is no work left in them.
   if (( open_windows )); then
     if [[ -z "$TMUX" ]]; then
       echo ""
@@ -900,6 +1084,38 @@ review-status() {
     done
     echo ""
     echo "${opened} window(s) opened, ${#actionable} review(s) still wanting work"
+  fi
+
+  # Every open review window shows what was just found, whether or not
+  # --windows opened it.
+  if tmux has-session -t "=pr-reviews" 2>/dev/null; then
+    for row in "${rows[@]}"; do
+      IFS=$'\t' read -r state dirname flags _ <<< "$row"
+      _review_set_window_state "$dirname" "$state" "$flags"
+    done
+  fi
+
+  # Re-review whatever has moved since the last review: updated, and needs
+  # attention with new commits. Launched in the background, so nothing steals
+  # focus; a window already running something gets a new pane below rather
+  # than being typed into.
+  if (( rereview )); then
+    echo ""
+    if (( ! ${#stale} )); then
+      echo "Nothing to re-review"
+      return 0
+    fi
+    local started=0 rc
+    for url in "${stale[@]}"; do
+      _review_launch "$url" background split
+      rc=$?
+      case $rc in
+        0) echo "  re-reviewing ${url}"; (( started++ )) ;;
+        3) echo "  skipped ${url} -- its window is running something" ;;
+        *) echo "  could not re-review ${url}" ;;
+      esac
+    done
+    echo "${started} of ${#stale} re-review(s) started in pr-reviews"
   fi
 }
 
@@ -1112,6 +1328,8 @@ _notes_resolve() {
     return
   fi
 
+  # --ignore-case: fzf's smart case would make `notes MC-1234 ...` match
+  # nothing (slugs are lowercase), and --exit-0 then returns silently.
   local pick
   pick=$(
     {
@@ -1120,7 +1338,7 @@ _notes_resolve() {
         "new in ${NOTES_INBOX}" "$slug" "" "[new]" \
         "no knowledge base topic yet — /wrap will route it later" \
         "+create:${slug}"
-    } | fzf --height=~20 --reverse \
+    } | fzf --height=~20 --reverse --ignore-case \
             --delimiter=$'\t' --with-nth=1 \
             --query="$query" --select-1 --exit-0 \
             --prompt='notes> ' \
@@ -1602,7 +1820,7 @@ code() {
   # "Worktree ready" — leaving a worktree with none of the code in it.
   if (( is_monorepo && ${#components[@]} )) && command -v spt &>/dev/null; then
     local -a known_components
-    known_components=( ${(f)"$(cd "$repo_root" && spt git:sparse list-components 2>/dev/null)"} )
+    known_components=( ${(f)"$(cd -q "$repo_root" && spt git:sparse list-components 2>/dev/null)"} )
     if (( ${#known_components[@]} )); then
       local bad=0 c
       for c in "${components[@]}"; do
@@ -1629,7 +1847,7 @@ code() {
     ( cd "$repo_root" && spt "${spt_args[@]}" ) || return 1
   else
     ( cd "$repo_root" && git worktree add -b "$branch" "$dest" \
-        "$(cd "$repo_root" && _git_default_branch)" ) || return 1
+        "$(cd -q "$repo_root" && _git_default_branch)" ) || return 1
     [[ ! -f "$repo_root/.env" ]] || cp "$repo_root/.env" "$dest/.env"
   fi
 
@@ -1707,9 +1925,11 @@ code() {
     print -r -- "$prompt_text"
   } > "$tmpfile"
 
+  # The prompt goes before --add-dir: that flag is variadic and would take the
+  # prompt as a second directory, starting Claude with no task.
   _agent_cmd "$mode" "$model"
   tmux send-keys -t "$session_name" \
-    "${REPLY} --add-dir ${(q)notes_dir} \"\$(cat ${tmpfile})\" && rm -f ${tmpfile}" Enter
+    "${REPLY} \"\$(cat ${tmpfile})\" --add-dir ${(q)notes_dir} && rm -f ${tmpfile}" Enter
 
   echo "Worktree: $dest"
   echo "Notes:    $notes_dir  (linked via --add-dir)"
