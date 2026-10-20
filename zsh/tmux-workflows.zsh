@@ -72,6 +72,10 @@
 # as review-gc does. REVIEW_AUTO_GC=0 leaves them for review-gc.
 : ${REVIEW_AUTO_GC:=1}
 
+# And approves again a PR you approved that has since only been rebased, once
+# its checks pass. REVIEW_AUTO_REAPPROVE=0 leaves those for you.
+: ${REVIEW_AUTO_REAPPROVE:=1}
+
 # Worktrees live inside the repo they belong to, at <repo>/.worktrees/<branch>
 # (slashes in the branch flattened to dashes). Nothing to manage but the repo
 # itself, and a worktree's repo is its grandparent dir rather than something
@@ -877,7 +881,8 @@ alias review-pr=review
 # yet.
 #
 # due is what an automatic re-review would do now -- commits (a review of what
-# changed) or replies (answer the threads) -- or "-" for nothing. It waits for
+# changed), replies (answer the threads) or reapprove (approve a rebase again)
+# -- or "-" for nothing. It waits for
 # REVIEW_REREVIEW_QUIET seconds without new activity, timed from when a probe
 # first saw it, which keeps working through rebases that make GitHub's commit
 # dates meaningless. Never due on your own PR, nor while findings or a draft
@@ -910,8 +915,8 @@ _review_probe() {
 
   local pr_json
   pr_json=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}" \
-    --jq '{state: .state, merged: .merged, head: .head.sha, title: .title,
-           author: .user.login}' 2>/dev/null) || pr_json=""
+    --jq '{state: .state, merged: .merged, head: .head.sha, base: .base.ref,
+           title: .title, author: .user.login}' 2>/dev/null) || pr_json=""
 
   if [[ -z "$pr_json" ]]; then
     printf 'unknown\t%s\t-\tcould not fetch PR status\t%s\t-\n' "$dirname" "$url"
@@ -927,10 +932,11 @@ _review_probe() {
       && printf '%s\n' "$_tmp" > "$meta"
   fi
 
-  local state is_merged current_head title
+  local state is_merged current_head base title
   state=$(print -r -- "$pr_json" | jq -r '.state')
   is_merged=$(print -r -- "$pr_json" | jq -r '.merged')
   current_head=$(print -r -- "$pr_json" | jq -r '.head')
+  base=$(print -r -- "$pr_json" | jq -r '.base')
   title=$(print -r -- "$pr_json" | jq -r '.title')
   local short_title="${title:0:60}"
   (( ${#title} > 60 )) && short_title="${short_title}…"
@@ -945,19 +951,27 @@ _review_probe() {
   fi
 
   # Your reviews, as: pending draft (0/1), latest submitted state, when it was
-  # submitted. A pending review is only ever visible to its author, so it is
-  # always yours.
+  # submitted, and the state, id and commit of your latest decision -- an
+  # approval, changes requested, or either dismissed -- which a reply in a
+  # thread, itself a review, does not replace. A pending review is only ever
+  # visible to its author, so it is always yours.
   local my_reviews="" has_pending=0 my_review_state="" my_submitted_at=""
+  local decision_state="" decision_id="" decision_commit=""
   if [[ -n "$my_login" ]]; then
     my_reviews=$(GH_HOST="$host" gh api "repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100" \
       --jq "[.[] | select(.user.login == \"${my_login}\")]
+            | (map(select(.state == \"APPROVED\" or .state == \"CHANGES_REQUESTED\"
+                          or .state == \"DISMISSED\")) | last) as \$decision
             | [(map(select(.state == \"PENDING\")) | length > 0 | if . then 1 else 0 end),
                (map(select(.state != \"PENDING\")) | last | .state // \"-\"),
-               (map(select(.state != \"PENDING\")) | last | .submitted_at // \"-\")]
+               (map(select(.state != \"PENDING\")) | last | .submitted_at // \"-\"),
+               (\$decision.state // \"-\"), (\$decision.id // \"-\"), (\$decision.commit_id // \"-\")]
             | @tsv" 2>/dev/null) || my_reviews=""
   fi
   if [[ -n "$my_reviews" ]]; then
-    IFS=$'\t' read -r has_pending my_review_state my_submitted_at <<< "$my_reviews"
+    IFS=$'\t' read -r has_pending my_review_state my_submitted_at \
+      decision_state decision_id decision_commit <<< "$my_reviews"
+    [[ "$decision_commit" == "-" ]] && decision_commit=""
     [[ "$my_review_state" == "-" ]] && my_review_state=""
     [[ "$my_submitted_at" == "-" ]] && my_submitted_at=""
   fi
@@ -1042,9 +1056,29 @@ _review_probe() {
   [[ -n "$ready_at" && ( -z "$my_submitted_at" || "$my_submitted_at" < "$ready_at" ) ]] && is_ready=1
   (( has_new_commits || new_replies || new_comments )) && has_activity=1
 
+  # A PR you approved that has since only been rebased -- the same changes on
+  # a newer base, however many commits that took -- is approved again once its
+  # checks pass (due=reapprove) rather than re-reviewed. GitHub may have
+  # dismissed your approval on the push or left it on the old commit; either
+  # way it reads as approved here, flagged until the approval is current.
+  local author rebased=0 ci=""
+  author=$(print -r -- "$pr_json" | jq -r '.author // empty')
+  if [[ -f "$meta" && -n "$my_login" && "$author" != "$my_login" && -n "$decision_commit" \
+        && "$decision_commit" != "$current_head" ]] && (( ! has_pending )) \
+      && _review_was_approval "$host" "$owner" "$repo" "$number" "$decision_state" "$decision_id" \
+      && _review_same_changes "$host" "$owner" "$repo" "$base" "$decision_commit" "$current_head"; then
+    rebased=1
+    _review_ci_state "$host" "$owner" "$repo" "$current_head"
+    ci="$REPLY"
+  fi
+
   local out_state flags=""
   local -a parts=()
-  if [[ "$my_review_state" == "APPROVED" ]]; then
+  if (( rebased )); then
+    out_state=approved
+    flags="rebased"
+    [[ "$ci" != passing ]] && flags+=", checks ${ci}"
+  elif [[ "$my_review_state" == "APPROVED" ]]; then
     out_state=approved
     (( has_new_commits )) && flags="new commits"
   elif (( reply_count > 0 || comment_count > 0 )); then
@@ -1071,9 +1105,18 @@ _review_probe() {
     out_state=open
   fi
 
-  local due="-" author
-  author=$(print -r -- "$pr_json" | jq -r '.author // empty')
-  if [[ -n "$my_login" && "$author" != "$my_login" ]] && (( quiet >= REVIEW_REREVIEW_QUIET )) \
+  # A rebase is never re-reviewed: the changes are the ones you approved. The
+  # head it was checked at is kept for _review_reapprove, so a push after this
+  # probe is not approved unseen.
+  local due="-"
+  if (( rebased )); then
+    if [[ "$ci" == passing ]]; then
+      local _tmp
+      due=reapprove
+      _tmp=$(jq --arg h "$current_head" '.reapprove_head = $h' "$meta") \
+        && printf '%s\n' "$_tmp" > "$meta"
+    fi
+  elif [[ -n "$my_login" && "$author" != "$my_login" ]] && (( quiet >= REVIEW_REREVIEW_QUIET )) \
       && (( ! has_pending && ! is_ready )) && [[ "$out_state" != approvable ]]; then
     if (( has_new_commits )); then
       due=commits
@@ -1084,6 +1127,79 @@ _review_probe() {
 
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$out_state" "$dirname" "${flags:--}" "$short_title" "$url" "$due"
+}
+
+# Whether your latest decision on a PR was an approval: args host, owner,
+# repo, number, the decision's state and review id. A dismissed review keeps
+# no state of its own, so the dismissal in the PR's timeline says what it was.
+_review_was_approval() {
+  [[ "$5" == APPROVED ]] && return 0
+  [[ "$5" == DISMISSED && "$6" == <-> ]] || return 1
+  local was
+  was=$(GH_HOST="$1" gh api "repos/$2/$3/issues/$4/timeline?per_page=100" --paginate \
+    --jq ".[] | select(.event == \"review_dismissed\" and .dismissed_review.review_id == $6)
+          | .dismissed_review.state" 2>/dev/null) || return 1
+  [[ "${was:l}" == *approved* ]]
+}
+
+# Whether two commits of a PR carry the same changes: args host, owner, repo,
+# base branch, then the two commits. Each is diffed from where it forked from
+# the base, and the diffs compared on their added and removed lines alone, so
+# a rebase -- which moves line numbers and context -- still matches. A file
+# without a patch (binary, or too big) has to be identical. Too many files to
+# list, or anything GitHub cannot answer, is not a match.
+_review_same_changes() {
+  local -a diffs
+  local sha out
+  for sha in "$5" "$6"; do
+    out=$(GH_HOST="$1" gh api "repos/$2/$3/compare/$4...${sha}" --jq '
+      if (.files | length) >= 300 then empty else
+        [.files[] | {filename, previous_filename, status,
+                     change: (if .patch then [.patch | split("\n")[] | select(test("^[-+]"))]
+                              else .sha end)}]
+        | sort_by(.filename) end' 2>/dev/null) || return 1
+    [[ -n "$out" ]] || return 1
+    diffs+=( "$out" )
+  done
+  [[ "${diffs[1]}" == "${diffs[2]}" ]]
+}
+
+# The checks on a commit, in REPLY: passing, pending, failing, or none --
+# check runs and commit statuses both, the latest of each by name.
+_review_ci_state() {
+  local runs statuses
+  runs=$(GH_HOST="$1" gh api "repos/$2/$3/commits/$4/check-runs?per_page=100" --paginate \
+    --jq '.check_runs[] | if .status != "completed" then "pending"
+            elif .conclusion == "success" or .conclusion == "neutral"
+                 or .conclusion == "skipped" then "passing"
+            else "failing" end' 2>/dev/null) || { REPLY=unknown; return 1 }
+  statuses=$(GH_HOST="$1" gh api "repos/$2/$3/commits/$4/status" \
+    --jq '.statuses[] | if .state == "success" then "passing"
+            elif .state == "pending" then "pending" else "failing" end' 2>/dev/null) \
+    || { REPLY=unknown; return 1 }
+  local all="${runs}"$'\n'"${statuses}"
+  if [[ "$all" == *failing* ]]; then REPLY=failing
+  elif [[ "$all" == *pending* ]]; then REPLY=pending
+  elif [[ "$all" == *passing* ]]; then REPLY=passing
+  else REPLY=none
+  fi
+}
+
+# Approve a review's PR again, at the head its probe found to be a rebase of
+# what you approved (see _review_probe). That head becomes the one last
+# reviewed, so a later re-review covers only what comes after it.
+_review_reapprove() {
+  local dir="${REVIEWS_DIR}/$1"
+  local meta="${dir}/.review-meta.json" owner repo number head
+  IFS=$'\t' read -r owner repo number head < <(jq -r \
+    '[.owner, .repo, .pr_number, .reapprove_head // "-"] | @tsv' "$meta" 2>/dev/null)
+  [[ -n "$head" && "$head" != "-" ]] || return 1
+  _review_dir_host "$dir"
+  GH_HOST="$REPLY" gh api -X POST "repos/${owner}/${repo}/pulls/${number}/reviews" \
+    -f event=APPROVE -f commit_id="$head" >/dev/null 2>&1 || return 1
+  local _tmp
+  _tmp=$(jq --arg h "$head" '.head_commit = $h | del(.reapprove_head)' "$meta") \
+    && printf '%s\n' "$_tmp" > "$meta"
 }
 
 # Every review's state, probed in parallel.
@@ -1125,8 +1241,9 @@ _review_probe_all() {
 #   review-status              the report
 #   review-status --windows    + a tmux window per review still wanting work
 #   review-status --rereview   + /review-pr again on every PR with new commits
-#   review-status --auto       + the automatic re-reviews that are due, and
-#                              merged and closed reviews removed
+#   review-status --auto       + the automatic re-reviews that are due,
+#                              rebases of PRs you approved approved again,
+#                              and merged and closed reviews removed
 #   review-status --watch      all of that, then again every
 #                              REVIEW_REFRESH_INTERVAL seconds until ctrl-c
 #
@@ -1297,6 +1414,21 @@ review-status() {
     done
     echo ""
     echo "${opened} window(s) opened, ${#actionable} review(s) still wanting work"
+  fi
+
+  # Approve again what was approved before a rebase and passes its checks.
+  if (( auto && REVIEW_AUTO_REAPPROVE )); then
+    local -a reapproved=()
+    for row in "${rows[@]}"; do
+      IFS=$'\t' read -r state dirname _ _ url due <<< "$row"
+      [[ "$due" == reapprove ]] || continue
+      if _review_reapprove "$dirname"; then
+        reapproved+=( "  ${labels[$dirname]} (rebased, checks passing)" )
+      else
+        reapproved+=( "  could not approve ${labels[$dirname]} again" )
+      fi
+    done
+    (( ${#reapproved} )) && { echo ""; echo "Approved again:"; printf '%s\n' "${reapproved[@]}" }
   fi
 
   _review_write_status_cache "${rows[@]}"
