@@ -68,6 +68,10 @@
 : ${REVIEW_REREVIEW_QUIET:=1200}
 : ${REVIEW_REREVIEW_MAX:=2}
 
+# Every `review-status --watch` pass also removes merged and closed reviews,
+# as review-gc does. REVIEW_AUTO_GC=0 leaves them for review-gc.
+: ${REVIEW_AUTO_GC:=1}
+
 # Worktrees live inside the repo they belong to, at <repo>/.worktrees/<branch>
 # (slashes in the branch flattened to dashes). Nothing to manage but the repo
 # itself, and a worktree's repo is its grandparent dir rather than something
@@ -1121,7 +1125,8 @@ _review_probe_all() {
 #   review-status              the report
 #   review-status --windows    + a tmux window per review still wanting work
 #   review-status --rereview   + /review-pr again on every PR with new commits
-#   review-status --auto       + the automatic re-reviews that are due
+#   review-status --auto       + the automatic re-reviews that are due, and
+#                              merged and closed reviews removed
 #   review-status --watch      all of that, then again every
 #                              REVIEW_REFRESH_INTERVAL seconds until ctrl-c
 #
@@ -1212,6 +1217,22 @@ review-status() {
     (( ${#labels[$dirname]} > w )) && w=${#labels[$dirname]}
   done
 
+  # Merged and closed reviews go, as review-gc would, so the list stays the
+  # work. One whose agent you may be using is left for a later pass.
+  local -a cleaned kept
+  if (( auto && REVIEW_AUTO_GC )); then
+    for row in "${rows[@]}"; do
+      IFS=$'\t' read -r state dirname _ <<< "$row"
+      if [[ "$state" == (merged|closed) ]] && ! _review_agent_in_use "$dirname"; then
+        _review_remove "$dirname"
+        cleaned+=( "  ${labels[$dirname]} (${state})" )
+      else
+        kept+=( "$row" )
+      fi
+    done
+    rows=( "${kept[@]}" )
+  fi
+
   local label
   for row in "${rows[@]}"; do
     IFS=$'\t' read -r state dirname flags title url due <<< "$row"
@@ -1259,6 +1280,7 @@ review-status() {
   (( ${#merged}    )) && { echo "Merged:";         printf '%s\n' "${merged[@]}";    echo "" }
   (( ${#closed}    )) && { echo "Closed:";         printf '%s\n' "${closed[@]}" }
   (( ${#unknown}   )) && { echo "Unknown:";        printf '%s\n' "${unknown[@]}" }
+  (( ${#cleaned}   )) && { echo "Cleaned up:";     printf '%s\n' "${cleaned[@]}" }
 
   # A window each for the reviews still wanting something, so the session you
   # come back to is the work rather than a list of it. Commented, approved,
@@ -1362,12 +1384,35 @@ review-gc() {
   echo ""
 
   for dirname in "${to_remove[@]}"; do
-    _review_window_name "${reviews_dir}/${dirname}"
-    _review_find_window "$dirname" "$REPLY"
-    [[ -n "$REPLY" ]] && tmux kill-window -t "=pr-reviews:${REPLY}" 2>/dev/null
-    rm -rf "${reviews_dir}/${dirname}"
+    _review_remove "$dirname"
     echo "  removed ${dirname}"
   done
+}
+
+# Remove a review dir and its pr-reviews window
+_review_remove() {
+  local dirname="$1"
+  _review_window_name "${REVIEWS_DIR}/${dirname}"
+  _review_find_window "$dirname" "$REPLY"
+  [[ -n "$REPLY" ]] && tmux kill-window -t "=pr-reviews:${REPLY}" 2>/dev/null
+  rm -rf "${REVIEWS_DIR}/${dirname}"
+}
+
+# Whether a review's window has an agent you may be using: busy, or idle for
+# less than REVIEW_REREVIEW_QUIET seconds -- the same test the automatic
+# re-reviews use before typing into one (see _review_launch).
+_review_agent_in_use() {
+  local dirname="$1" target pane idle_at
+  _review_window_name "${REVIEWS_DIR}/${dirname}"
+  _review_find_window "$dirname" "$REPLY"
+  [[ -n "$REPLY" ]] || return 1
+  target="=pr-reviews:${REPLY}"
+  pane=$(tmux list-panes -t "$target" -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
+    | awk '$2 ~ /^([0-9]+\.[0-9]+\.[0-9]+|claude|snipe)$/ { print $1; exit }')
+  [[ -n "$pane" ]] || return 1
+  idle_at=$(tmux show-options -wqv -t "$target" @review_agent_idle_at)
+  [[ "$(tmux show-options -wqv -t "$target" @review_agent)" != idle ]] \
+    || (( EPOCHSECONDS - ${idle_at:-0} < REVIEW_REREVIEW_QUIET ))
 }
 
 # --- Workflow: Notes ---
