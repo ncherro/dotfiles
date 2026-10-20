@@ -869,6 +869,7 @@ review() {
 alias review-pr=review
 
 # One review's state, as a single TSV line: state, dir, flags, title, url, due
+# -- or no line for an open PR of your own.
 #
 # No field is ever empty -- "-" stands in for one -- because read(1) with
 # IFS=tab treats a run of tabs as a single delimiter, which silently shifts
@@ -885,8 +886,7 @@ alias review-pr=review
 # -- or "-" for nothing. It waits for
 # REVIEW_REREVIEW_QUIET seconds without new activity, timed from when a probe
 # first saw it, which keeps working through rebases that make GitHub's commit
-# dates meaningless. Never due on your own PR, nor while findings or a draft
-# review wait for you: re-reviewing would replace findings you have not read,
+# dates meaningless. Never due while findings or a draft review wait for you: re-reviewing would replace findings you have not read,
 # and GitHub allows one pending review at a time.
 #
 # Split out of review-status so the calls can be fanned out, and so the session
@@ -949,6 +949,12 @@ _review_probe() {
     printf 'closed\t%s\t-\t%s\t%s\t-\n' "$dirname" "$short_title" "$url"
     return
   fi
+
+  # Your own PR is your work, not a review: no line at all while it is open.
+  # Merged or closed, it still gets one above, so it is cleaned up.
+  local author
+  author=$(print -r -- "$pr_json" | jq -r '.author // empty')
+  [[ -n "$my_login" && "$author" == "$my_login" ]] && return
 
   # Your reviews, as: pending draft (0/1), latest submitted state, when it was
   # submitted, and the state, id and commit of your latest decision -- an
@@ -1061,9 +1067,8 @@ _review_probe() {
   # checks pass (due=reapprove) rather than re-reviewed. GitHub may have
   # dismissed your approval on the push or left it on the old commit; either
   # way it reads as approved here, flagged until the approval is current.
-  local author rebased=0 ci=""
-  author=$(print -r -- "$pr_json" | jq -r '.author // empty')
-  if [[ -f "$meta" && -n "$my_login" && "$author" != "$my_login" && -n "$decision_commit" \
+  local rebased=0 ci=""
+  if [[ -f "$meta" && -n "$my_login" && -n "$decision_commit" \
         && "$decision_commit" != "$current_head" ]] && (( ! has_pending )) \
       && _review_was_approval "$host" "$owner" "$repo" "$number" "$decision_state" "$decision_id" \
       && _review_same_changes "$host" "$owner" "$repo" "$base" "$decision_commit" "$current_head"; then
@@ -1116,7 +1121,7 @@ _review_probe() {
       _tmp=$(jq --arg h "$current_head" '.reapprove_head = $h' "$meta") \
         && printf '%s\n' "$_tmp" > "$meta"
     fi
-  elif [[ -n "$my_login" && "$author" != "$my_login" ]] && (( quiet >= REVIEW_REREVIEW_QUIET )) \
+  elif [[ -n "$my_login" ]] && (( quiet >= REVIEW_REREVIEW_QUIET )) \
       && (( ! has_pending && ! is_ready )) && [[ "$out_state" != approvable ]]; then
     if (( has_new_commits )); then
       due=commits
