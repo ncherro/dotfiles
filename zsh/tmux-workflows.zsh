@@ -252,6 +252,21 @@ _all_worktree_dirs() {
 # (auto-accepts file edits, still pauses on shell commands → fewer wasted
 # iteration cycles). --yolo is right for tight scaffolding where you trust
 # the agent to run anything.
+# Copy every .env file from a source repo into a fresh worktree, preserving
+# each file's path relative to the repo root (e.g. apps/web/.env.local lands at
+# the same spot in the worktree). .env files are gitignored, so a fresh checkout
+# doesn't have them — replicating them keeps the worktree runnable. No-op when
+# the source has none. node_modules/.git are pruned so we don't walk them.
+_gwt_copy_env_files() {
+  local src="$1" dst="$2" f rel
+  find "$src" \( -name node_modules -o -name .git \) -prune -o \
+    -type f \( -name '.env' -o -name '.env.*' \) -print 2>/dev/null | while IFS= read -r f; do
+    rel="${f#$src/}"
+    mkdir -p "$dst/$(dirname "$rel")"
+    cp "$f" "$dst/$rel"
+  done
+}
+
 gwt() {
   if _in_worktree; then
     echo "Already in a worktree"
@@ -336,7 +351,7 @@ gwt() {
     branch="$1"
     local dest=$(_worktree_path "$source_root" "$branch")
     git worktree add -b "$branch" "$dest" "$(_git_default_branch)" || return 1
-    [[ ! -f "$source_root/.env" ]] || cp "$source_root/.env" "$dest/.env"
+    _gwt_copy_env_files "$source_root" "$dest"
     cd "$dest" || return 1
     if [[ -n "$2" && -n "$GWT_SPARSE_CHECKOUT_CMD" ]]; then
       eval "$GWT_SPARSE_CHECKOUT_CMD $2" || return 1
@@ -358,7 +373,7 @@ gwt() {
       fi
       git checkout "$(_git_default_branch)" || return 1
       git worktree add "$dest" "$branch" || return 1
-      [[ ! -f "$source_root/.env" ]] || cp "$source_root/.env" "$dest/.env"
+      _gwt_copy_env_files "$source_root" "$dest"
       cd "$dest" || return 1
       created=1
     fi
@@ -2247,7 +2262,7 @@ code() {
   else
     ( cd "$repo_root" && git worktree add -b "$branch" "$dest" \
         "$(cd -q "$repo_root" && _git_default_branch)" ) || return 1
-    [[ ! -f "$repo_root/.env" ]] || cp "$repo_root/.env" "$dest/.env"
+    _gwt_copy_env_files "$repo_root" "$dest"
   fi
 
   # Belt and braces for the above: confirm the code is actually there.
