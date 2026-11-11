@@ -1,0 +1,49 @@
+#!/bin/bash
+# claude-notify — Claude Code Notification hook.
+#
+# Wire it up in ~/.claude/settings.json (see docs/setup.md):
+#   Notification idle_prompt        claude-notify
+#   Notification permission_prompt  claude-notify Submarine
+#
+# macOS notification that, when clicked, focuses kitty and jumps the tmux
+# client to the pane running the Claude session that fired it.
+#
+# Usage: claude-notify [sound-name]
+# Reads the hook's JSON payload on stdin for the message text.
+#
+# Requires terminal-notifier (brew install terminal-notifier). Without it,
+# falls back to a plain, non-clickable osascript notification. No-op off macOS.
+
+[ "$(uname)" = "Darwin" ] || exit 0
+
+sound="${1:-}"
+message="$(/usr/bin/python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("message") or "Needs your attention")
+except Exception: print("Needs your attention")' 2>/dev/null)"
+: "${message:=Needs your attention}"
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+notifier="$(command -v terminal-notifier)"
+
+if [ -z "$notifier" ]; then
+  esc="${message//\"/\\\"}"
+  osascript -e "display notification \"$esc\" with title \"Claude Code\"${sound:+ sound name \"$sound\"}" >/dev/null 2>&1
+  exit 0
+fi
+
+args=(-title "Claude Code" -message "$message" -activate net.kovidgoyal.kitty)
+[ -n "$sound" ] && args+=(-sound "$sound")
+
+if [ -n "$TMUX" ] && [ -n "$TMUX_PANE" ]; then
+  tmux="$(command -v tmux)"
+  socket="${TMUX%%,*}"
+  target="$("$tmux" -S "$socket" display-message -p -t "$TMUX_PANE" '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null)"
+  args+=(-subtitle "$target" -group "claude-$TMUX_PANE")
+  # On click: switch the (most recently active) tmux client to this pane's
+  # session, then its window and pane. Uses the stable pane id (%N) so it
+  # survives window renames/reorders.
+  args+=(-execute "$tmux -S '$socket' switch-client -t '$TMUX_PANE' && $tmux -S '$socket' select-window -t '$TMUX_PANE' && $tmux -S '$socket' select-pane -t '$TMUX_PANE'")
+fi
+
+"$notifier" "${args[@]}" >/dev/null 2>&1 &
+exit 0

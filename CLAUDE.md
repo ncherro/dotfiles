@@ -18,10 +18,12 @@ gitconfig
 gitignore_global       # symlinked to ~/.gitignore (core.excludesfile)
 ```
 
-Claude Code settings are **not** in this repo. `~/.claude/settings.json` is
-symlinked to `~/workspace/dotfiles/claude/settings.json` — a separate work
-dotfiles repo on GHE. Model pins (`model`, `availableModels`,
-`ANTHROPIC_DEFAULT_*` under `env`) live there, not here.
+Claude Code settings are **not** in this repo. On the work machine
+`~/.claude/settings.json` is symlinked to `~/workspace/dotfiles/claude/settings.json`
+— a separate work dotfiles repo on GHE. Model pins (`model`, `availableModels`,
+`ANTHROPIC_DEFAULT_*` under `env`) live there, not here. On personal machines
+it's a plain local file. Either way, hook scripts it calls (`bin/claude-notify`,
+`bin/review-agent-hook`) live in `bin/` here.
 
 `~/.zshrc.local` is sourced automatically but never committed — use it for machine-local or sensitive config.
 

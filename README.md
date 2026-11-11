@@ -33,6 +33,7 @@ bin/
   tmux-sessions        # the session list behind tls and prefix + s
   notes-merge          # consolidate duplicate notes dirs, with undo
   notes-recall         # find the dir you were working in, by searching transcripts
+  claude-notify        # Claude Code notification hook: click to jump to its tmux pane
 docs/                  # the long explanations, linked from below
 tmux.conf
 vimrc
