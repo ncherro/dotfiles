@@ -34,3 +34,11 @@ bin/worktree-gc you-PROJ-913-dalhouse-pool-tuning
 ```
 
 `MONOREPO_DIR` (see Configuration) also enables monorepo-specific cleanup here: sparse query worktree reset and Bazel cache pruning.
+
+## Docker cleanup
+
+`bin/docker-cleanup.sh` lists what it will remove and asks before doing anything (`-y` skips the prompt). It removes stopped containers except those matching `KEEP_CONTAINERS` (default `^actionloop-`), then images no remaining container uses, then build cache unused for `BUILD_CACHE_MAX_AGE` (default `720h`). It never removes volumes.
+
+```sh
+KEEP_CONTAINERS='^(actionloop-|pic-editor-)' bin/docker-cleanup.sh
+```

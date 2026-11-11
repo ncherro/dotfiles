@@ -27,6 +27,7 @@ zshrc.local.example    # template for machine-local overrides
 gitignore_global       # symlinked to ~/.gitignore (core.excludesfile)
 bin/
   worktree-gc          # prune merged worktrees, stale sessions, and build caches
+  docker-cleanup.sh    # reclaim docker disk space without losing volumes or warm build cache
   notes-index          # joins notes dirs + session metadata + knowledge base
   notes-preview        # fzf preview pane for the notes picker
   resume-preview       # fzf preview pane for the resume picker
