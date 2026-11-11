@@ -18,6 +18,7 @@ esac
 
 source $DOTFILES/zsh/base.zsh
 source $DOTFILES/zsh/tmux-workflows.zsh
+source $DOTFILES/zsh/scan.zsh
 
 export PATH="$HOME/.local/bin:$PATH"
 
