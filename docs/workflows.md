@@ -36,7 +36,8 @@ Set these before sourcing to override defaults:
 | `NOTES_DIR` | `$WORKSPACE/_notes` | Research notes directory |
 | `REVIEWS_DIR` | `$WORKSPACE/_reviews` | PR review artifacts directory |
 | `NOTES_KB` | `$WORKSPACE/notes-kb` | Knowledge base `notes` routes against. Unset it to fall back to plain directory-name matching |
-| `MONOREPO_DIR` | *(empty)* | Repo whose worktrees go through `mono git:worktree` rather than plain git. Also enables monorepo cleanup in `worktree-gc` |
+| `MONOREPO_DIR` | *(empty)* | Repo whose worktrees go through `$MONOREPO_TOOL git:worktree` rather than plain git. Also enables monorepo cleanup in `worktree-gc` |
+| `MONOREPO_TOOL` | *(empty)* | Command name of the monorepo's CLI (worktrees, sparse checkout, Bazel cache pruning). Export it from `~/.zshrc.local` so `worktree-gc` sees it too |
 | `MONOREPO_FETCH_CMD` | *(empty)* | How `gfr` fetches `$MONOREPO_DIR` before rebasing (e.g. `mono git:fetch-local`). Unset → plain `git pull --rebase` everywhere |
 | `REVIEW_GH_HOST` | `github.com` | Host the PR review workflow calls, passed as `GH_HOST` (e.g. a GitHub Enterprise hostname) |
 | `REVIEW_DEFAULT_OWNER` | *(empty)* | Org assumed for review dirs predating `.review-meta.json`. Unset → those dirs report "could not fetch PR status" rather than guessing |

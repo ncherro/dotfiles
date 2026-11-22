@@ -40,10 +40,16 @@
 : ${NOTES_CACHE:="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-workflows/notes-routing.tsv"}
 : ${NOTES_REDIRECTS:="${NOTES_CACHE:h}/notes-redirects.tsv"}
 
-# Repo whose worktrees are created by `mono git:worktree` rather than plain git,
-# so they inherit sparse checkout and get a Bazel output base. Also the repo
-# `gfr` and `code` treat as the monorepo.
+# Repo whose worktrees are created by the monorepo's own CLI rather than plain
+# git, so they inherit sparse checkout and get a Bazel output base. Also the
+# repo `gfr` and `code` treat as the monorepo.
 : ${MONOREPO_DIR:=""}
+
+# That CLI's command name. It must provide `git:worktree add`, `git:sparse
+# copy-from-branch|list-components|add` and `bazel:prune-output-dirs`. Export
+# it (worktree-gc is a separate script). Kept out of this file on purpose:
+# set it in ~/.zshrc.local.
+: ${MONOREPO_TOOL:=""}
 
 # How to fetch the monorepo: it has its own fetch path, and a plain
 # `git pull --rebase` against it is slow enough to be unusable.
@@ -381,7 +387,8 @@ gwt() {
 
   if (( created && sparse )); then
     echo "→ Copying sparse checkout from $(_git_default_branch)..."
-    mono git:sparse copy-from-branch "$(_git_default_branch)" || {
+    [[ -n "$MONOREPO_TOOL" ]] || { echo "gwt: set MONOREPO_TOOL to copy the sparse checkout"; cd "$original_pwd"; return 1; }
+    "$MONOREPO_TOOL" git:sparse copy-from-branch "$(_git_default_branch)" || {
       echo "gwt: sparse checkout copy failed"
       cd "$original_pwd"
       return 1
@@ -489,7 +496,7 @@ _review_parse_url() {
 }
 
 # The GitHub host a PR URL lives on, falling back to REVIEW_GH_HOST. Reviews
-# span hosts (ghe.example.com, example.ghe.com), so every gh call has to ask
+# can span hosts (e.g. an old and a new GHE), so every gh call has to ask
 # the host the PR came from rather than one global one. Into REPLY.
 _review_host() {
   local url="$1"
@@ -2224,17 +2231,18 @@ code() {
 
   # Same destination either way; only the creation differs. The monorepo's
   # worktrees need sparse-checkout inheritance and a Bazel output base, which
-  # only `mono git:worktree` sets up.
+  # only the monorepo CLI's `git:worktree` sets up.
   local is_monorepo=0
   [[ -n "$MONOREPO_DIR" && "$repo_root" == "${MONOREPO_DIR:A}" ]] && is_monorepo=1
 
   # Components are repo-relative paths (<system>/<component>), not bare
-  # directory names. `mono git:worktree add -c` accepts a name that
+  # directory names. `$MONOREPO_TOOL git:worktree add -c` accepts a name that
   # matches nothing, writes it as a top-level cone pattern and reports
   # "Worktree ready" — leaving a worktree with none of the code in it.
-  if (( is_monorepo && ${#components[@]} )) && command -v mono &>/dev/null; then
+  if (( is_monorepo && ${#components[@]} )) && [[ -n "$MONOREPO_TOOL" ]] \
+      && command -v "$MONOREPO_TOOL" &>/dev/null; then
     local -a known_components
-    known_components=( ${(f)"$(cd -q "$repo_root" && mono git:sparse list-components 2>/dev/null)"} )
+    known_components=( ${(f)"$(cd -q "$repo_root" && $MONOREPO_TOOL git:sparse list-components 2>/dev/null)"} )
     if (( ${#known_components[@]} )); then
       local bad=0 c
       for c in "${components[@]}"; do
@@ -2245,7 +2253,7 @@ code() {
       done
       if (( bad )); then
         echo "      components are <system>/<component> paths. List them with:"
-        echo "        mono git:sparse list-components"
+        echo "        $MONOREPO_TOOL git:sparse list-components"
         return 1
       fi
     fi
@@ -2254,11 +2262,12 @@ code() {
   if [[ -d "$dest" ]]; then
     echo "code: worktree already exists: $dest"
   elif (( is_monorepo )); then
-    local -a spt_args
-    spt_args=( git:worktree add "$branch" "$dest" )
+    [[ -n "$MONOREPO_TOOL" ]] || { echo "code: set MONOREPO_TOOL to create monorepo worktrees"; return 1; }
+    local -a mono_args
+    mono_args=( git:worktree add "$branch" "$dest" )
     local c
-    for c in "${components[@]}"; do spt_args+=( -c "$c" ); done
-    ( cd "$repo_root" && mono "${spt_args[@]}" ) || return 1
+    for c in "${components[@]}"; do mono_args+=( -c "$c" ); done
+    ( cd "$repo_root" && "$MONOREPO_TOOL" "${mono_args[@]}" ) || return 1
   else
     ( cd "$repo_root" && git worktree add -b "$branch" "$dest" \
         "$(cd -q "$repo_root" && _git_default_branch)" ) || return 1
@@ -2275,7 +2284,7 @@ code() {
   done
   if (( _missing )); then
     echo "      fix in place with:"
-    echo "        cd $dest && mono git:sparse add <component>..."
+    echo "        cd $dest && $MONOREPO_TOOL git:sparse add <component>..."
   fi
 
   # Link the worktree back to the investigation, for /wrap from either side.

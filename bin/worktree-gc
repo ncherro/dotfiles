@@ -7,6 +7,7 @@ set -euo pipefail
 : "${WORKSPACE:="$HOME/workspace"}"
 : "${WORKTREES_SUBDIR:=".worktrees"}"
 : "${MONOREPO_DIR:=""}"
+: "${MONOREPO_TOOL:=""}"   # the monorepo's CLI (see tmux-workflows.zsh)
 : "${REVIEWS_DIR:="$WORKSPACE/_reviews"}"
 : "${NOTES_DIR:="$WORKSPACE/_notes"}"
 
@@ -207,8 +208,9 @@ if [ -d "$NOTES_DIR" ]; then
 fi
 
 # clear unused bazel cache
-if [ -n "$MONOREPO_DIR" ] && [ -d "$MONOREPO_DIR" ] && command -v mono &>/dev/null; then
+if [ -n "$MONOREPO_DIR" ] && [ -d "$MONOREPO_DIR" ] && [ -n "$MONOREPO_TOOL" ] \
+    && command -v "$MONOREPO_TOOL" &>/dev/null; then
   cd "$MONOREPO_DIR"
-  mono bazel:prune-output-dirs --delete
+  "$MONOREPO_TOOL" bazel:prune-output-dirs --delete
   cd -
 fi
